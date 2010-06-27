@@ -11,10 +11,14 @@ App::Termcast::User - termcast user class
 
 =head1 SYNOPSIS
 
+TODO
 
 =head1 DESCRIPTION
 
+TODO
+
 =cut
+
 
 __PACKAGE__->meta->make_immutable;
 

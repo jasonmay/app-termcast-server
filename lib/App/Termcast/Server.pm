@@ -1,11 +1,23 @@
 #!::usr::bin::env perl
 package App::Termcast::Server;
-use Moose;
+
 use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
+
+use Moose;
 use KiokuDB;
+use KiokuX::User::Util qw(crypt_password);
+
+use Digest::SHA1;
+use Data::UUID::LibUUID;
+
+use App::Termcast::Session;
+use App::Termcast::User;
+
 use namespace::autoclean;
+
+$|++;
 
 =head1 NAME
 
@@ -38,13 +50,6 @@ has termcast_guard => (
     builder => '_build_termcast_guard'
 );
 
-has termcasts => (
-    is  => 'ro',
-    isa => 'HashRef',
-    traits => ['Hash'],
-    default => sub { +{} },
-);
-
 sub _build_termcast_guard {
     my $self = shift;
 
@@ -58,17 +63,64 @@ sub _build_termcast_guard {
                 $self->handle_termcast($h);
             },
             on_error => sub {
-                warn "aaah!";
+                my ($h, $fatal, $error) = @_;
+
+                if ($fatal) {
+                    die $error;
+                }
+                else {
+                    warn $error;
+                }
             },
         );
         $h->push_read(
             line => sub {
                 my ($h, $line) = @_;
                 chomp $line;
-                warn "$line!!!!";
+                my $user_object = $self->handle_auth($h, $line)
+                if (not defined $user_object) {
+                    warn "Authentication failed";
+                    $h->push_destroy;
+                }
             },
-        )
+        );
+
+        my $session = App::Termcast::Session->new(
+            user   => $user_object,
+            handle => $h,
+        );
+
+        my $session_id = new_uuid_string();
+
+        $self->set_session($session_id => $session);
     };
+}
+
+has termcasts => (
+    is      => 'ro',
+    isa     => 'HashRef',
+    traits  => ['Hash'],
+    default => sub { +{} },
+);
+
+has dsn => (
+    is      => 'ro',
+    isa     => 'Str',
+    default => 'dbi:SQLite:dbname=termcast.sqlite',
+);
+
+has kiokudb => (
+    is       => 'ro',
+    isa      => 'KiokuDB',
+    builder  => '_build_kiokudb',
+    init_arg => undef,
+    lazy     => 1,
+);
+
+sub _build_kiokudb {
+    my $self = shift;
+    die "DSN must be provided" unless $self->dsn;
+    KiokuDB->connect($self->dsn);
 }
 
 has server_guard   => (
@@ -80,19 +132,62 @@ sub _build_server_guard {
     my $self = shift;
 
     tcp_server undef, $self->server_port, sub {
-        $self->handle_server();
+        my ($fh, $host, $port) = @_;
+        my $h = AnyEvent::Handle->new(
+            fh => $fh,
+            on_read => sub {
+                my $h = shift;
+                $self->handle_server($h);
+                warn "handle server";
+            },
+            on_error => sub {
+                my ($h, $fatal, $error) = @_;
+
+                if ($fatal) {
+                    die $error;
+                }
+                else {
+                    warn $error;
+                }
+            },
+        );
+        my $session_id = new_uuid_string();
+
+        $self->set_server_session($session_id => $h);
     };
 }
 
-has timer_guard    => (
-    is      => 'ro',
-    builder => '_build_timer_guard'
+has termcast_sessions => (
+    is      => 'rw',
+    isa     => 'HashRef',
+    traits  => ['Hash'],
+    handles => {
+        set_termcast_session => 'set',
+        get_termcast_session => 'get',
+        termcast_session_ids => 'keys',
+    },
+    default => sub { +{} },
 );
 
-sub _build_timer_guard {
-    my $self = shift;
+has server_sessions => (
+    is      => 'rw',
+    isa     => 'HashRef',
+    traits  => ['Hash'],
+    handles => {
+        set_server_session => 'set',
+        get_server_session => 'get',
+        server_session_ids => 'keys',
+    },
+    default => sub { +{} },
+);
 
-    AE::timer 0, 10, sub { warn "foo"; };
+sub termcast_session_lookup {
+    my $self   = shift;
+    my $handle = shift;
+
+    return first {
+        $self->get_termcast_session($_)->handle == $handle
+    } $self->termcast_session_ids;
 }
 
 sub handle_termcast {
@@ -103,21 +198,80 @@ sub handle_termcast {
         chunk => 1,
         sub {
             my ($h, $char) = @_;
-            warn ord($char);
+            my $session = $self->termcast_session_lookup($h)
+                or die "could not find session ID for $h";
+            $session->add_text($char);
         },
     );
 }
 
+
 sub create_user {
     my $self = shift;
+    my $user = shift;
+    my $pass = shift;
+
+    my $user_object;
+
+    $user_object = App::Termcast::User->new(
+        id       => $user,
+        password => crypt_password($pass),
+    );
+
+    {
+        my $s = $self->kiokudb->new_scope;
+        $self->kiokudb->store($user => $user_object);
+    }
+
+    return $user_object;
 }
 
-sub get_user_auth {
-    my $self = shift;
+sub handle_auth {
+    my $self   = shift;
+    my $handle = shift;
+    my $line   = shift;
+
+    my ($user, $pass) = $line =~ /hello \s+ (\S+) \s+ (\S+)/x;
+
+    my $user_object;
+    {
+        my $scope = $self->kiokudb->new_scope;
+        $user_object = $self->kiokudb->lookup($user)
+                    || $self->create_user($user, $pass);
+    }
+
+    if ($user_object->check_password($pass)) {
+        return $user_object;
+    }
+    else {
+        return undef;
+    }
 }
 
 sub handle_server {
     my $self = shift;
+    my $handle = shift;
+
+    $handle->push_read(
+        json => sub {
+            my ($h, $data) = @_;
+
+            if ($data->{request} eq 'sessions') {
+                $handle->push_write(
+                    json => {
+                        sessions => [
+                                map {;
+                                +{
+                                    session_id => $_,
+                                    user       => $self->get_termcast_session($_)->user->id,
+                                }
+                                } $self->termcast_session_ids;
+                        ],
+                    }
+                );
+            }
+        }
+    );
 }
 
 sub run {
@@ -129,6 +283,52 @@ __PACKAGE__->meta->make_immutable;
 1;
 
 __END__
+
+client: {
+    request => 'chpass',
+    user     => 'jasonmay',
+    oldpass => 'asdf1234',
+    newpass => '12341234',
+}
+server: {
+    chpass => {
+        result => 'success' or 'failure'
+    }
+}
+
+client: {
+    request => 'sessions',
+}
+server: {
+    sessions => {
+        [
+            {
+                name => 'jasonmay',
+                session_id => 'abcd',
+            },
+            {
+                name => 'doy',
+                session_id => 'ef12',
+            },
+            {
+                name => 'sartak',
+                session_id => '3456',
+            },
+        ],
+    }
+}
+
+client: {
+    request => 'stream',
+    session => 'abcdef'
+}
+server: {
+    request_stream => {
+        stream => 'T$43RF@#r3r@F#@#fwef@$',
+    }
+}
+
+
 
 =head1 METHODS
 
