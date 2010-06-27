@@ -73,26 +73,31 @@ sub _build_termcast_guard {
                 }
             },
         );
+        my $cv = AnyEvent->condvar;
+        my $user_object;
         $h->push_read(
             line => sub {
                 my ($h, $line) = @_;
                 chomp $line;
-                my $user_object = $self->handle_auth($h, $line)
+                my $user_object = $self->handle_auth($h, $line);
+                $cv->send;
                 if (not defined $user_object) {
                     warn "Authentication failed";
                     $h->push_destroy;
                 }
+                else {
+                    my $session = App::Termcast::Session->new(
+                        user   => $user_object,
+                        handle => $h,
+                    );
+
+                    my $session_id = new_uuid_string();
+
+                    $self->set_termcast_session($session_id => $session);
+                }
             },
         );
 
-        my $session = App::Termcast::Session->new(
-            user   => $user_object,
-            handle => $h,
-        );
-
-        my $session_id = new_uuid_string();
-
-        $self->set_session($session_id => $session);
     };
 }
 
@@ -185,9 +190,10 @@ sub termcast_session_lookup {
     my $self   = shift;
     my $handle = shift;
 
-    return first {
-        $self->get_termcast_session($_)->handle == $handle
-    } $self->termcast_session_ids;
+    for ($self->termcast_session_ids) {
+        return $self->get_termcast_session($_)
+            if $self->get_termcast_session($_)->handle == $handle
+    }
 }
 
 sub handle_termcast {
@@ -260,12 +266,12 @@ sub handle_server {
                 $handle->push_write(
                     json => {
                         sessions => [
-                                map {;
+                                map {
                                 +{
                                     session_id => $_,
                                     user       => $self->get_termcast_session($_)->user->id,
                                 }
-                                } $self->termcast_session_ids;
+                                } $self->termcast_session_ids
                         ],
                     }
                 );
