@@ -287,6 +287,25 @@ sub handle_server {
                     }
                 );
             }
+            elsif ($data->{request} eq 'stream') {
+                return unless $data->{session};
+
+                my $session;
+                return unless $session = $self->get_termcast_session($data->{session});
+                my $buffer = $session->buffer;
+
+                if ($data->{since}) {
+                    $buffer = substr($buffer, length($buffer) - $data->{since});
+                }
+
+                $h->push_write(
+                    json => {
+                        response => {
+                            stream => $buffer
+                        }
+                    }
+                );
+            }
         }
     );
 }
