@@ -15,6 +15,8 @@ use Data::UUID::LibUUID;
 use App::Termcast::Session;
 use App::Termcast::User;
 
+use Scalar::Util qw(weaken);
+
 use namespace::autoclean;
 
 $|++;
@@ -66,10 +68,11 @@ sub _build_termcast_guard {
                 my ($h, $fatal, $error) = @_;
 
                 if ($fatal) {
-                    die $error;
-                }
-                else {
                     warn $error;
+                    weaken(my $weakself = $self);
+                    my $session_id = $self->termcast_session_id_lookup($h);
+                    warn $session_id;
+                    $weakself->delete_termcast_session($session_id);
                 }
             },
         );
@@ -83,7 +86,7 @@ sub _build_termcast_guard {
                 $cv->send;
                 if (not defined $user_object) {
                     warn "Authentication failed";
-                    $h->push_destroy;
+                    $h->destroy;
                 }
                 else {
                     my $session = App::Termcast::Session->new(
@@ -143,16 +146,13 @@ sub _build_server_guard {
             on_read => sub {
                 my $h = shift;
                 $self->handle_server($h);
-                warn "handle server";
             },
             on_error => sub {
                 my ($h, $fatal, $error) = @_;
 
+                warn $error;
                 if ($fatal) {
-                    die $error;
-                }
-                else {
-                    warn $error;
+                    $h->destroy;
                 }
             },
         );
@@ -167,9 +167,10 @@ has termcast_sessions => (
     isa     => 'HashRef',
     traits  => ['Hash'],
     handles => {
-        set_termcast_session => 'set',
-        get_termcast_session => 'get',
-        termcast_session_ids => 'keys',
+        set_termcast_session    => 'set',
+        get_termcast_session    => 'get',
+        delete_termcast_session => 'delete',
+        termcast_session_ids    => 'keys',
     },
     default => sub { +{} },
 );
@@ -179,9 +180,10 @@ has server_sessions => (
     isa     => 'HashRef',
     traits  => ['Hash'],
     handles => {
-        set_server_session => 'set',
-        get_server_session => 'get',
-        server_session_ids => 'keys',
+        set_server_session    => 'set',
+        get_server_session    => 'get',
+        delete_server_session => 'delete',
+        server_session_ids    => 'keys',
     },
     default => sub { +{} },
 );
@@ -193,6 +195,15 @@ sub termcast_session_lookup {
     for ($self->termcast_session_ids) {
         return $self->get_termcast_session($_)
             if $self->get_termcast_session($_)->handle == $handle
+    }
+}
+
+sub termcast_session_id_lookup {
+    my $self   = shift;
+    my $handle = shift;
+
+    for ($self->termcast_session_ids) {
+        return $_ if $self->get_termcast_session($_)->handle == $handle
     }
 }
 
@@ -263,7 +274,7 @@ sub handle_server {
             my ($h, $data) = @_;
 
             if ($data->{request} eq 'sessions') {
-                $handle->push_write(
+                $h->push_write(
                     json => {
                         sessions => [
                                 map {
