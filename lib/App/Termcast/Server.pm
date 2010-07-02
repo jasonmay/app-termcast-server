@@ -68,11 +68,12 @@ sub _build_termcast_guard {
                 my ($h, $fatal, $error) = @_;
 
                 if ($fatal) {
-                    warn $error;
                     weaken(my $weakself = $self);
                     my $session_id = $self->termcast_session_id_lookup($h);
-                    warn $session_id;
                     $weakself->delete_termcast_session($session_id);
+                }
+                else {
+                    warn $error;
                 }
             },
         );
