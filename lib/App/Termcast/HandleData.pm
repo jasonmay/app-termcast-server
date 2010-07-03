@@ -1,10 +1,10 @@
 #!::usr::bin::env perl
-package App::Termcast::SessionData;
+package App::Termcast::HandleData;
 use Moose::Role;
 
 =head1 NAME
 
-App::Termcast::SessionData -
+App::Termcast::HandleData -
 
 =head1 SYNOPSIS
 

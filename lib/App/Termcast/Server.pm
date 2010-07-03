@@ -92,7 +92,7 @@ sub _build_termcast_guard {
                 }
                 else {
                     my $session_class = App::Termcast::Session->with_traits(
-                        'App::Termcast::SessionData',
+                        'App::Termcast::HandleData',
                     );
 
                     my $session = $session_class->new(
