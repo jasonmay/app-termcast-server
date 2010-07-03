@@ -265,7 +265,7 @@ sub handle_server {
                             map {
                             +{
                                 session_id => $_,
-                                user       => $self->get_termcast_handle($_)->user->id,
+                                user       => $self->get_termcast_handle($_)->session->user->id,
                             }
                             } $self->termcast_handle_ids
                         ],
