@@ -260,6 +260,7 @@ sub handle_server {
             if ($data->{request} eq 'sessions') {
                 $h->push_write(
                     json => {
+                        response => 'sessions',
                         sessions => [
                             map {
                             +{
