@@ -159,15 +159,15 @@ sub _build_server_guard {
                 if ($fatal) {
                     $h->destroy;
                 }
-            },
+            }
         );
         my $session_id = new_uuid_string();
 
-        $self->set_server_session($session_id => $h);
+        $self->set_server_handle($session_id => $h);
     };
 }
 
-has termcast_sessions => (
+has termcast_handles => (
     is      => 'rw',
     isa     => 'HashRef',
     traits  => ['Hash'],
@@ -180,7 +180,7 @@ has termcast_sessions => (
     default => sub { +{} },
 );
 
-has server_sessions => (
+has server_handles => (
     is      => 'rw',
     isa     => 'HashRef',
     traits  => ['Hash'],
