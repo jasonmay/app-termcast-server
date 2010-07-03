@@ -70,13 +70,13 @@ sub _build_termcast_guard {
 
                 if ($fatal) {
                     weaken(my $weakself = $self);
-                    $weakself->delete_termcast_session($h->session_id);
+                    $weakself->delete_termcast_handle($h->handle_id);
                 }
                 else {
                     warn $error;
                 }
             },
-            session_id => new_uuid_string(),
+            handle_id => new_uuid_string(),
         );
         my $cv = AnyEvent->condvar;
         my $user_object;
@@ -101,7 +101,7 @@ sub _build_termcast_guard {
 
                     $h->session($session);
 
-                    $self->set_termcast_session($h->session_id => $h);
+                    $self->set_termcast_handle($h->handle_id => $h);
                 }
             },
         );
@@ -161,9 +161,9 @@ sub _build_server_guard {
                 }
             }
         );
-        my $session_id = new_uuid_string();
+        my $handle_id = new_uuid_string();
 
-        $self->set_server_handle($session_id => $h);
+        $self->set_server_handle($handle_id => $h);
     };
 }
 
@@ -172,10 +172,10 @@ has termcast_handles => (
     isa     => 'HashRef',
     traits  => ['Hash'],
     handles => {
-        set_termcast_session    => 'set',
-        get_termcast_session    => 'get',
-        delete_termcast_session => 'delete',
-        termcast_session_ids    => 'keys',
+        set_termcast_handle    => 'set',
+        get_termcast_handle    => 'get',
+        delete_termcast_handle => 'delete',
+        termcast_handle_ids    => 'keys',
     },
     default => sub { +{} },
 );
@@ -185,10 +185,10 @@ has server_handles => (
     isa     => 'HashRef',
     traits  => ['Hash'],
     handles => {
-        set_server_session    => 'set',
-        get_server_session    => 'get',
-        delete_server_session => 'delete',
-        server_session_ids    => 'keys',
+        set_server_handle    => 'set',
+        get_server_handle    => 'get',
+        delete_server_handle => 'delete',
+        server_handle_ids    => 'keys',
     },
     default => sub { +{} },
 );
@@ -265,9 +265,9 @@ sub handle_server {
                             map {
                             +{
                                 session_id => $_,
-                                user       => $self->get_termcast_session($_)->user->id,
+                                user       => $self->get_termcast_handle($_)->user->id,
                             }
-                            } $self->termcast_session_ids
+                            } $self->termcast_handle_ids
                         ],
                     }
                 );
@@ -276,7 +276,7 @@ sub handle_server {
                 return unless $data->{session};
 
                 my $session;
-                return unless $session = $self->get_termcast_session($data->{session});
+                return unless $session = $self->get_termcast_handle($data->{session});
                 my $buffer = $session->buffer;
 
                 if ($data->{since}) {

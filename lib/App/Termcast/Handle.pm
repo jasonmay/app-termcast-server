@@ -17,7 +17,7 @@ App::Termcast::Handle -
 
 =cut
 
-has session_id => (
+has handle_id => (
     is       => 'ro',
     isa      => 'Str',
     required => 1,
