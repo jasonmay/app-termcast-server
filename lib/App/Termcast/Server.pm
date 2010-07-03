@@ -91,11 +91,9 @@ sub _build_termcast_guard {
                     $h->destroy;
                 }
                 else {
-                    my $session_class = App::Termcast::Session->with_traits(
+                    my $session = App::Termcast::Session->with_traits(
                         'App::Termcast::SessionData',
-                    );
-
-                    my $session = $session_class->new(
+                    )->new(
                         user => $user_object,
                     );
 
