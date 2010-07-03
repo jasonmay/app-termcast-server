@@ -85,7 +85,7 @@ sub _build_termcast_guard {
                 my ($h, $line) = @_;
                 chomp $line;
                 my $user_object = $self->handle_auth($h, $line);
-                $cv->send;
+                #$cv->send;
                 if (not defined $user_object) {
                     warn "Authentication failed";
                     $h->destroy;
@@ -100,10 +100,11 @@ sub _build_termcast_guard {
                     $h->session($session);
 
                     $self->set_termcast_handle($h->handle_id => $h);
+
+                    $self->send_connection_notice($h->handle_id);
                 }
             },
         );
-
     };
 }
 
@@ -289,6 +290,25 @@ sub handle_server {
                     }
                 );
             }
+        }
+    );
+}
+
+sub send_connection_notice {
+    my $self      = shift;
+    my $handle_id = shift;
+
+    my $handle = $self->get_termcast_handle($handle_id);
+
+    my $data = {
+        handle_id => $handle_id,
+        user      => $handle->session->user,
+    }
+
+    $handle->push_write(
+        json => {
+            notice     => 'connection',
+            connection => $data,
         }
     );
 }
