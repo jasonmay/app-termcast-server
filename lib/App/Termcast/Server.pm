@@ -305,52 +305,6 @@ __PACKAGE__->meta->make_immutable;
 
 __END__
 
-client: {
-    request => 'chpass',
-    user     => 'jasonmay',
-    oldpass => 'asdf1234',
-    newpass => '12341234',
-}
-server: {
-    chpass => {
-        result => 'success' or 'failure'
-    }
-}
-
-client: {
-    request => 'sessions',
-}
-server: {
-    sessions => {
-        [
-            {
-                name => 'jasonmay',
-                session_id => 'abcd',
-            },
-            {
-                name => 'doy',
-                session_id => 'ef12',
-            },
-            {
-                name => 'sartak',
-                session_id => '3456',
-            },
-        ],
-    }
-}
-
-client: {
-    request => 'stream',
-    session => 'abcdef'
-}
-server: {
-    request_stream => {
-        stream => 'T$43RF@#r3r@F#@#fwef@$',
-    }
-}
-
-
-
 =head1 METHODS
 
 
