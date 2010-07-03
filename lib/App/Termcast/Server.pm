@@ -262,12 +262,12 @@ sub handle_server {
                 $h->push_write(
                     json => {
                         sessions => [
-                                map {
-                                +{
-                                    session_id => $_,
-                                    user       => $self->get_termcast_session($_)->user->id,
-                                }
-                                } $self->termcast_session_ids
+                            map {
+                            +{
+                                session_id => $_,
+                                user       => $self->get_termcast_session($_)->user->id,
+                            }
+                            } $self->termcast_session_ids
                         ],
                     }
                 );
