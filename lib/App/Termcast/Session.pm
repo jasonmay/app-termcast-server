@@ -5,6 +5,8 @@ use AnyEvent::Handle;
 use HTML::FromANSI;
 use namespace::autoclean;
 
+with qw(MooseX::Traits);
+
 =head1 NAME
 
 App::Termcast::Session -
@@ -18,28 +20,6 @@ TODO
 TODO
 
 =cut
-
-has handle => (
-    is  => 'ro',
-    isa => 'AnyEvent::Handle',
-);
-
-has user => (
-    is  => 'ro',
-    isa => 'App::Termcast::User',
-);
-
-has buffer => (
-    is  => 'rw',
-    isa => 'Str',
-
-    traits  => ['String'],
-    handles => {
-        add_text      => 'append',
-        buffer_length => 'length',
-        clear_buffer  => 'clear',
-    },
-);
 
 __PACKAGE__->meta->make_immutable;
 

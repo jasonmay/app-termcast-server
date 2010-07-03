@@ -14,6 +14,7 @@ use Data::UUID::LibUUID;
 
 use App::Termcast::Session;
 use App::Termcast::User;
+use App::Termcast::Handle;
 
 use Scalar::Util qw(weaken);
 
@@ -58,7 +59,7 @@ sub _build_termcast_guard {
     my $h;
     tcp_server undef, $self->termcast_port, sub {
         my ($fh, $host, $port) = @_;
-        $h = AnyEvent::Handle->new(
+        $h = App::Termcast::Handle->new(
             fh => $fh,
             on_read => sub {
                 my $h = shift;
@@ -69,13 +70,13 @@ sub _build_termcast_guard {
 
                 if ($fatal) {
                     weaken(my $weakself = $self);
-                    my $session_id = $self->termcast_session_id_lookup($h);
-                    $weakself->delete_termcast_session($session_id);
+                    $weakself->delete_termcast_session($h->session_id);
                 }
                 else {
                     warn $error;
                 }
             },
+            session_id => new_uuid_string(),
         );
         my $cv = AnyEvent->condvar;
         my $user_object;
@@ -90,14 +91,17 @@ sub _build_termcast_guard {
                     $h->destroy;
                 }
                 else {
-                    my $session = App::Termcast::Session->new(
-                        user   => $user_object,
-                        handle => $h,
+                    my $session_class = App::Termcast::Session->with_traits(
+                        'App::Termcast::SessionData',
                     );
 
-                    my $session_id = new_uuid_string();
+                    my $session = $session_class->new(
+                        user => $user_object,
+                    );
 
-                    $self->set_termcast_session($session_id => $session);
+                    $h->session($session);
+
+                    $self->set_termcast_session($h->session_id => $h);
                 }
             },
         );
@@ -189,25 +193,6 @@ has server_sessions => (
     default => sub { +{} },
 );
 
-sub termcast_session_lookup {
-    my $self   = shift;
-    my $handle = shift;
-
-    for ($self->termcast_session_ids) {
-        return $self->get_termcast_session($_)
-            if $self->get_termcast_session($_)->handle == $handle
-    }
-}
-
-sub termcast_session_id_lookup {
-    my $self   = shift;
-    my $handle = shift;
-
-    for ($self->termcast_session_ids) {
-        return $_ if $self->get_termcast_session($_)->handle == $handle
-    }
-}
-
 sub handle_termcast {
     my $self = shift;
     my $h    = shift;
@@ -216,9 +201,7 @@ sub handle_termcast {
         chunk => 1,
         sub {
             my ($h, $char) = @_;
-            my $session = $self->termcast_session_lookup($h)
-                or die "could not find session ID for $h";
-            $session->add_text($char);
+            $h->session->add_text($char);
         },
     );
 }
@@ -273,6 +256,7 @@ sub handle_server {
     $handle->push_read(
         json => sub {
             my ($h, $data) = @_;
+            require YAML; warn YAML::Dump($data);
 
             if ($data->{request} eq 'sessions') {
                 $h->push_write(
