@@ -71,6 +71,8 @@ sub _build_termcast_guard {
                 if ($fatal) {
                     weaken(my $weakself = $self);
                     $weakself->delete_termcast_handle($h->handle_id);
+                    $weakself->send_disconnection_notice($h->handle_id);
+                    $h->destroy;
                 }
                 else {
                     warn $error;
@@ -188,6 +190,7 @@ has server_handles => (
         get_server_handle    => 'get',
         delete_server_handle => 'delete',
         server_handle_ids    => 'keys',
+        server_handle_list   => 'values',
     },
     default => sub { +{} },
 );
@@ -255,9 +258,9 @@ sub handle_server {
     $handle->push_read(
         json => sub {
             my ($h, $data) = @_;
-            require YAML; warn YAML::Dump($data);
 
             if ($data->{request} eq 'sessions') {
+                warn "RESPONSE";
                 $h->push_write(
                     json => {
                         response => 'sessions',
@@ -299,19 +302,33 @@ sub send_connection_notice {
     my $self      = shift;
     my $handle_id = shift;
 
-    my $handle = $self->get_termcast_handle($handle_id);
-
     my $data = {
-        handle_id => $handle_id,
-        user      => $handle->session->user,
-    }
+        session_id => $handle_id,
+        user      => $self->get_termcast_handle($handle_id)->session->user->id,
+    };
 
-    $handle->push_write(
-        json => {
-            notice     => 'connection',
-            connection => $data,
-        }
-    );
+    foreach my $handle ($self->server_handle_list) {
+        $handle->push_write(
+            json => {
+                notice     => 'connect',
+                connection => $data,
+            }
+        );
+    }
+}
+
+sub send_disconnection_notice {
+    my $self      = shift;
+    my $handle_id = shift;
+
+    foreach my $handle ($self->server_handle_list) {
+        $handle->push_write(
+            json => {
+                notice     => 'disconnect',
+                session_id => $handle_id,
+            }
+        );
+    }
 }
 
 sub run {
