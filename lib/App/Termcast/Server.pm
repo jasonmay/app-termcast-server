@@ -156,9 +156,11 @@ sub _build_server_guard {
             on_error => sub {
                 my ($h, $fatal, $error) = @_;
 
-                warn $error;
                 if ($fatal) {
                     $h->destroy;
+                }
+                else {
+                    warn $error;
                 }
             }
         );
@@ -260,7 +262,6 @@ sub handle_server {
             my ($h, $data) = @_;
 
             if ($data->{request} eq 'sessions') {
-                warn "RESPONSE";
                 $h->push_write(
                     json => {
                         response => 'sessions',
