@@ -48,89 +48,6 @@ has server_port => (
     default => 9092,
 );
 
-sub BUILD {
-    my $self = shift;
-
-    tcp_server undef, $self->termcast_port, sub {
-        my ($fh, $host, $port) = @_;
-        my $h = App::Termcast::Handle->new(
-            fh => $fh,
-            on_read => sub {
-                my $h = shift;
-                $self->handle_termcast($h);
-            },
-            on_error => sub {
-                my ($h, $fatal, $error) = @_;
-
-                if ($fatal) {
-                    weaken(my $weakself = $self);
-                    $weakself->delete_termcast_handle($h->handle_id);
-                    $weakself->send_disconnection_notice($h->handle_id);
-                    $h->destroy;
-                }
-                else {
-                    warn $error;
-                }
-            },
-            handle_id => new_uuid_string(),
-        );
-        my $cv = AnyEvent->condvar;
-        my $user_object;
-
-        $self->set_termcast_handle($h->handle_id => $h);
-
-        $h->push_read(
-            line => sub {
-                my ($h, $line) = @_;
-                chomp $line;
-                my $user_object = $self->handle_auth($h, $line);
-                #$cv->send;
-                if (not defined $user_object) {
-                    warn "Authentication failed";
-                    $self->delete_termcast_handle($h->handle_id);
-                    $h->destroy;
-                }
-                else {
-                    my $session = App::Termcast::Session->with_traits(
-                        'App::Termcast::SessionData',
-                    )->new(
-                        user => $user_object,
-                    );
-
-                    $h->session($session);
-
-
-                    $self->send_connection_notice($h->handle_id);
-                }
-            },
-        );
-    };
-
-    tcp_server undef, $self->server_port, sub {
-        my ($fh, $host, $port) = @_;
-        my $h = AnyEvent::Handle->new(
-            fh => $fh,
-            on_read => sub {
-                my $h = shift;
-                $self->handle_server($h);
-            },
-            on_error => sub {
-                my ($h, $fatal, $error) = @_;
-
-                if ($fatal) {
-                    $h->destroy;
-                }
-                else {
-                    warn $error;
-                }
-            }
-        );
-        my $handle_id = new_uuid_string();
-
-        $self->set_server_handle($handle_id => $h);
-    };
-}
-
 has termcasts => (
     is      => 'ro',
     isa     => 'HashRef',
@@ -184,6 +101,88 @@ has server_handles => (
     },
     default => sub { +{} },
 );
+
+sub BUILD {
+    my $self = shift;
+
+    tcp_server undef, $self->termcast_port, sub {
+        my ($fh, $host, $port) = @_;
+        my $h = App::Termcast::Handle->new(
+            fh => $fh,
+            on_read => sub {
+                my $h = shift;
+                $self->handle_termcast($h);
+            },
+            on_error => sub {
+                my ($h, $fatal, $error) = @_;
+
+                if ($fatal) {
+                    weaken(my $weakself = $self);
+                    $weakself->delete_termcast_handle($h->handle_id);
+                    $weakself->send_disconnection_notice($h->handle_id);
+                    $h->destroy;
+                }
+                else {
+                    warn $error;
+                }
+            },
+            handle_id => new_uuid_string(),
+        );
+        my $cv = AnyEvent->condvar;
+        my $user_object;
+
+        $self->set_termcast_handle($h->handle_id => $h);
+
+        $h->push_read(
+            line => sub {
+                my ($h, $line) = @_;
+                chomp $line;
+                my $user_object = $self->handle_auth($h, $line);
+                #$cv->send;
+                if (not defined $user_object) {
+                    warn "Authentication failed";
+                    $self->delete_termcast_handle($h->handle_id);
+                    $h->destroy;
+                }
+                else {
+                    my $session = App::Termcast::Session->with_traits(
+                        'App::Termcast::SessionData',
+                    )->new(
+                        user => $user_object,
+                    );
+
+                    $h->session($session);
+
+                    $self->send_connection_notice($h->handle_id);
+                }
+            },
+        );
+    };
+
+    tcp_server undef, $self->server_port, sub {
+        my ($fh, $host, $port) = @_;
+        my $h = AnyEvent::Handle->new(
+            fh => $fh,
+            on_read => sub {
+                my $h = shift;
+                $self->handle_server($h);
+            },
+            on_error => sub {
+                my ($h, $fatal, $error) = @_;
+
+                if ($fatal) {
+                    $h->destroy;
+                }
+                else {
+                    warn $error;
+                }
+            }
+        );
+        my $handle_id = new_uuid_string();
+
+        $self->set_server_handle($handle_id => $h);
+    };
+}
 
 sub handle_termcast {
     my $self = shift;
