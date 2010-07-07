@@ -7,6 +7,7 @@ build_requires 'Test::More';
 
 requires 'KiokuX::User';
 requires 'KiokuDB';
+requires 'KiokuDB::Backend::DBI';
 requires 'Moose';
 requires 'Data::UUID::LibUUID';
 requires 'HTML::FromANSI';
