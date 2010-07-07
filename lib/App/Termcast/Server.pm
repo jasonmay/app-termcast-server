@@ -172,6 +172,10 @@ sub BUILD {
                     $h->session->stream_handles->remove($u_h);
                 },
             );
+
+            #catch up
+            $u_h->push_write($h->session->buffer));
+
             $h->session->stream_handles->insert($u_h);
         }
     };
