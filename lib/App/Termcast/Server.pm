@@ -174,7 +174,7 @@ sub BUILD {
             );
 
             #catch up
-            $u_h->push_write($h->session->buffer));
+            $u_h->push_write($h->session->buffer);
 
             $h->session->stream_handles->insert($u_h);
         }
