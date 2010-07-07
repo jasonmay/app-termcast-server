@@ -172,15 +172,20 @@ sub BUILD {
                 #on_read  => sub { warn "@_" },
                 on_error => sub {
                     my ($u_h, $fatal, $error) = @_;
-                    $u_h->destroy if $fatal;
                     $h->session->stream_handles->remove($u_h);
+                    if ($fatal) {
+                        $u_h->destroy;
+                    }
+                    else {
+                        warn $error;
+                    }
                 },
             );
 
             #catch up
             $u_h->push_write($h->session->buffer);
 
-            $h->session->stream_handles->insert($u_h);
+            $self->get_termcast_handle($h->handle_id)->session->stream_handles->insert($u_h);
         }
     };
 
