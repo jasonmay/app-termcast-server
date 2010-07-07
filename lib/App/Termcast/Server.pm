@@ -9,7 +9,8 @@ use Moose;
 use KiokuDB;
 use KiokuX::User::Util qw(crypt_password);
 
-use Digest::SHA1;
+use Set::Object;
+
 use Data::UUID::LibUUID;
 
 use App::Termcast::Session;
@@ -157,6 +158,22 @@ sub BUILD {
                 }
             },
         );
+
+        tcp_server 'unix/', $h->handle_id, sub {
+            my ($fh, $host, $port) = @_;
+
+            # we want to close over data from $h
+            my $u_h = AnyEvent::Handle->new(
+                fh => $fh,
+                #on_read  => sub { warn "@_" },
+                on_error => sub {
+                    my ($u_h, $fatal, $error) = @_;
+                    $u_h->destroy if $fatal;
+                    $h->session->stream_handles->remove($u_h);
+                },
+            );
+            $h->session->stream_handles->insert($u_h);
+        }
     };
 
     tcp_server undef, $self->server_port, sub {
@@ -193,10 +210,12 @@ sub handle_termcast {
         sub {
             my ($h, $char) = @_;
             $h->session->add_text($char);
+            for ($h->session->stream_handles->members) {
+                $_->push_write($char);
+            }
         },
     );
 }
-
 
 sub create_user {
     my $self = shift;

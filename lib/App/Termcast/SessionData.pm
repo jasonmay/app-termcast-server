@@ -1,6 +1,7 @@
 #!::usr::bin::env perl
 package App::Termcast::SessionData;
 use Moose::Role;
+use Set::Object qw(set);
 
 =head1 NAME
 
@@ -31,6 +32,21 @@ has buffer => (
     },
 );
 
+has streaming => (
+    is     => 'rw',
+    isa    => 'Bool',
+    traits => ['Bool'],
+    handles => {
+        start_streaming => 'set',
+        stop_streaming  => 'unset',
+    }
+);
+
+has stream_handles => (
+    is      => 'ro',
+    isa     => 'Set::Object',
+    default => sub { set() },
+);
 
 no Moose::Role;
 
