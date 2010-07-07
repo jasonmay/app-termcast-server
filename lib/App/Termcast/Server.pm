@@ -121,6 +121,10 @@ sub BUILD {
                     weaken(my $weakself = $self);
                     $weakself->delete_termcast_handle($h->handle_id);
                     $weakself->send_disconnection_notice($h->handle_id);
+
+                    $_->destroy for $h->session->stream_handles->members;
+
+                    unlink $h->handle_id;
                     $h->destroy;
                 }
                 else {
