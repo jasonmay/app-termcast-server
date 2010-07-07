@@ -48,18 +48,12 @@ has server_port => (
     default => 9092,
 );
 
-has termcast_guard => (
-    is      => 'ro',
-    builder => '_build_termcast_guard'
-);
-
-sub _build_termcast_guard {
+sub BUILD {
     my $self = shift;
 
-    my $h;
     tcp_server undef, $self->termcast_port, sub {
         my ($fh, $host, $port) = @_;
-        $h = App::Termcast::Handle->new(
+        my $h = App::Termcast::Handle->new(
             fh => $fh,
             on_read => sub {
                 my $h = shift;
@@ -108,6 +102,30 @@ sub _build_termcast_guard {
             },
         );
     };
+
+    tcp_server undef, $self->server_port, sub {
+        my ($fh, $host, $port) = @_;
+        my $h = AnyEvent::Handle->new(
+            fh => $fh,
+            on_read => sub {
+                my $h = shift;
+                $self->handle_server($h);
+            },
+            on_error => sub {
+                my ($h, $fatal, $error) = @_;
+
+                if ($fatal) {
+                    $h->destroy;
+                }
+                else {
+                    warn $error;
+                }
+            }
+        );
+        my $handle_id = new_uuid_string();
+
+        $self->set_server_handle($handle_id => $h);
+    };
 }
 
 has termcasts => (
@@ -135,39 +153,6 @@ sub _build_kiokudb {
     my $self = shift;
     die "DSN must be provided" unless $self->dsn;
     KiokuDB->connect($self->dsn);
-}
-
-has server_guard   => (
-    is      => 'ro',
-    builder => '_build_server_guard'
-);
-
-sub _build_server_guard {
-    my $self = shift;
-
-    tcp_server undef, $self->server_port, sub {
-        my ($fh, $host, $port) = @_;
-        my $h = AnyEvent::Handle->new(
-            fh => $fh,
-            on_read => sub {
-                my $h = shift;
-                $self->handle_server($h);
-            },
-            on_error => sub {
-                my ($h, $fatal, $error) = @_;
-
-                if ($fatal) {
-                    $h->destroy;
-                }
-                else {
-                    warn $error;
-                }
-            }
-        );
-        my $handle_id = new_uuid_string();
-
-        $self->set_server_handle($handle_id => $h);
-    };
 }
 
 has termcast_handles => (
