@@ -76,6 +76,9 @@ sub BUILD {
         );
         my $cv = AnyEvent->condvar;
         my $user_object;
+
+        $self->set_termcast_handle($h->handle_id => $h);
+
         $h->push_read(
             line => sub {
                 my ($h, $line) = @_;
@@ -84,6 +87,7 @@ sub BUILD {
                 #$cv->send;
                 if (not defined $user_object) {
                     warn "Authentication failed";
+                    $self->delete_termcast_handle($h->handle_id);
                     $h->destroy;
                 }
                 else {
@@ -95,7 +99,6 @@ sub BUILD {
 
                     $h->session($session);
 
-                    $self->set_termcast_handle($h->handle_id => $h);
 
                     $self->send_connection_notice($h->handle_id);
                 }
