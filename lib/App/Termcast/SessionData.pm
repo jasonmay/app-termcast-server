@@ -2,6 +2,7 @@
 package App::Termcast::SessionData;
 use Moose::Role;
 use Set::Object qw(set);
+use MooseX::Types::Path::Class;
 
 =head1 NAME
 
@@ -46,6 +47,12 @@ has stream_handles => (
     is      => 'ro',
     isa     => 'Set::Object',
     default => sub { set() },
+);
+
+has stream_socket => (
+    is     => 'rw',
+    isa    => 'Path::Class::File',
+    coerce => 1,
 );
 
 no Moose::Role;

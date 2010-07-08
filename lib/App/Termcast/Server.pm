@@ -19,6 +19,8 @@ use App::Termcast::Handle;
 
 use Scalar::Util qw(weaken);
 
+use File::Temp qw(tempfile);
+
 use namespace::autoclean;
 
 $|++;
@@ -158,35 +160,40 @@ sub BUILD {
 
                     $h->session($session);
 
+
+                    (undef, my $file) = tempfile();
+                    unlink $file;
+                    tcp_server 'unix/', $file, sub {
+                        my ($fh, $host, $port) = @_;
+
+                        # we want to close over data from $h
+                        my $u_h = AnyEvent::Handle->new(
+                            fh => $fh,
+                            on_error => sub {
+                                my ($u_h, $fatal, $error) = @_;
+                                $h->session->stream_handles->remove($u_h);
+                                if ($fatal) {
+                                    $u_h->destroy;
+                                }
+                                else {
+                                    warn $error;
+                                }
+                            },
+                        );
+
+                        #catch up
+                        $u_h->push_write($h->session->buffer);
+
+                        $self->get_termcast_handle($h->handle_id)->session->stream_handles->insert($u_h);
+                    };
+
+                    require Path::Class::File;
+                    $self->get_termcast_handle($h->handle_id)->session->stream_socket($file);
                     $self->send_connection_notice($h->handle_id);
                 }
             },
         );
 
-        tcp_server 'unix/', $h->handle_id, sub {
-            my ($fh, $host, $port) = @_;
-
-            # we want to close over data from $h
-            my $u_h = AnyEvent::Handle->new(
-                fh => $fh,
-                #on_read  => sub { warn "@_" },
-                on_error => sub {
-                    my ($u_h, $fatal, $error) = @_;
-                    $h->session->stream_handles->remove($u_h);
-                    if ($fatal) {
-                        $u_h->destroy;
-                    }
-                    else {
-                        warn $error;
-                    }
-                },
-            );
-
-            #catch up
-            $u_h->push_write($h->session->buffer);
-
-            $self->get_termcast_handle($h->handle_id)->session->stream_handles->insert($u_h);
-        }
     };
 
     tcp_server undef, $self->server_port, sub {
@@ -286,31 +293,15 @@ sub handle_server {
                         response => 'sessions',
                         sessions => [
                             map {
+                            my $tc_handle = $self->get_termcast_handle($_);
+
                             +{
                                 session_id => $_,
-                                user       => $self->get_termcast_handle($_)->session->user->id,
+                                user       => $tc_handle->session->user->id,
+                                socket     => $tc_handle->session->stream_socket->stringify,
                             }
                             } $self->termcast_handle_ids
                         ],
-                    }
-                );
-            }
-            elsif ($data->{request} eq 'stream') {
-                return unless $data->{session};
-
-                my $session;
-                return unless $session = $self->get_termcast_handle($data->{session});
-                my $buffer = $session->buffer;
-
-                if ($data->{since}) {
-                    $buffer = substr($buffer, length($buffer) - $data->{since});
-                }
-
-                $h->push_write(
-                    json => {
-                        response => {
-                            stream => $buffer
-                        }
                     }
                 );
             }
@@ -324,7 +315,8 @@ sub send_connection_notice {
 
     my $data = {
         session_id => $handle_id,
-        user      => $self->get_termcast_handle($handle_id)->session->user->id,
+        user       => $self->get_termcast_handle($handle_id)->session->user->id,
+        socket     => $self->get_termcast_handle($handle_id)->session->stream_socket->stringify,
     };
 
     foreach my $handle ($self->server_handle_list) {
