@@ -87,6 +87,7 @@ has termcast_handles => (
         get_termcast_handle    => 'get',
         delete_termcast_handle => 'delete',
         termcast_handle_ids    => 'keys',
+        termcast_handle_list   => 'values',
     },
     default => sub { +{} },
 );
@@ -104,6 +105,21 @@ has server_handles => (
     },
     default => sub { +{} },
 );
+
+has timer => (
+    is  => 'ro',
+    builder => '_build_timer',
+);
+
+sub _build_timer {
+    my $self = shift;
+    AE::timer 0, 20, sub {
+        foreach my $handle ($self->termcast_handle_list) {
+            $self->shorten_buffer($handle);
+        }
+    };
+}
+
 
 sub BUILD {
     my $self = shift;
@@ -219,6 +235,15 @@ sub BUILD {
 
         $self->set_server_handle($handle_id => $h);
     };
+}
+
+sub shorten_buffer {
+    my $self = shift;
+    my $handle = shift;
+
+    my $buffer = $handle->session->buffer;
+    $buffer =~ s/.*\e\[2J(?:\e2\[H)?//;
+    $handle->session->buffer($buffer);
 }
 
 sub handle_termcast {
