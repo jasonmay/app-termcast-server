@@ -42,7 +42,7 @@ TODO
 has termcast_port => (
     is  => 'ro',
     isa => 'Int',
-    default => 9091,
+    default => 31337,
 );
 
 has server_port => (
