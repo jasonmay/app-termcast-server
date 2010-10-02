@@ -124,19 +124,19 @@ sub _build_timer {
 sub BUILD {
     my $self = shift;
 
+    weaken(my $weakself = $self);
     tcp_server undef, $self->termcast_port, sub {
         my ($fh, $host, $port) = @_;
         my $h = App::Termcast::Handle->new(
             fh => $fh,
             on_read => sub {
                 my $h = shift;
-                $self->handle_termcast($h);
+                $weakself->handle_termcast($h);
             },
             on_error => sub {
                 my ($h, $fatal, $error) = @_;
 
                 if ($fatal) {
-                    weaken(my $weakself = $self);
                     $weakself->delete_termcast_handle($h->handle_id);
                     $weakself->send_disconnection_notice($h->handle_id);
 
