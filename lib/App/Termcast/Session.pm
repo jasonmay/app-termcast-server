@@ -1,6 +1,7 @@
 #!::usr::bin::env perl
 package App::Termcast::Session;
 use Moose;
+use DateTime;
 use AnyEvent::Handle;
 use HTML::FromANSI;
 use namespace::autoclean;
@@ -20,6 +21,14 @@ TODO
 TODO
 
 =cut
+
+has last_active => (
+    is      => 'rw',
+    isa     => 'Int',
+    default => sub { time() },
+);
+
+sub mark_active { shift->last_active( time() ); }
 
 __PACKAGE__->meta->make_immutable;
 

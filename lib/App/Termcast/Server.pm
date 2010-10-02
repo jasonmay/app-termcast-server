@@ -254,8 +254,11 @@ sub handle_termcast {
         chunk => 1,
         sub {
             my ($h, $char) = @_;
-            $h->session->add_text($char);
-            for ($h->session->stream_handles->members) {
+            my $session = $h->session;
+            $session->add_text($char);
+            $session->mark_active();
+
+            for ($session->stream_handles->members) {
                 $_->push_write($char);
             }
         },
@@ -324,6 +327,7 @@ sub handle_server {
                                 session_id => $_,
                                 user       => $tc_handle->session->user->id,
                                 socket     => $tc_handle->session->stream_socket->stringify,
+                                last_active => $tc_handle->session->last_active,
                             }
                             } $self->termcast_handle_ids
                         ],
@@ -342,6 +346,7 @@ sub send_connection_notice {
         session_id => $handle_id,
         user       => $self->get_termcast_handle($handle_id)->session->user->id,
         socket     => $self->get_termcast_handle($handle_id)->session->stream_socket->stringify,
+        last_active => $self->get_termcast_handle($handle_id)->session->last_active,
     };
 
     foreach my $handle ($self->server_handle_list) {
