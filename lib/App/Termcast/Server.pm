@@ -250,19 +250,16 @@ sub handle_termcast {
     my $self = shift;
     my $h    = shift;
 
-    $h->push_read(
-        chunk => 1,
-        sub {
-            my ($h, $char) = @_;
-            my $session = $h->session;
-            $session->add_text($char);
-            $session->mark_active();
+    my $session = $h->session;
 
-            for ($session->stream_handles->members) {
-                $_->push_write($char);
-            }
-        },
-    );
+    $session->add_text($h->rbuf);
+    $session->mark_active();
+
+    for ($session->stream_handles->members) {
+        syswrite($_->fh, $h->rbuf);
+    }
+
+    $h->{rbuf} = '';
 }
 
 sub create_user {
