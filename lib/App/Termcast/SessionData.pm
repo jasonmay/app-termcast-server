@@ -33,6 +33,14 @@ has buffer => (
     },
 );
 
+sub fix_buffer_length {
+    my $self = shift;
+    my $len = $self->buffer_length;
+    if ($len > 51_200) {
+        substr($self->{buffer}, 0, $len-51_200) = '';
+    }
+}
+
 has streaming => (
     is     => 'rw',
     isa    => 'Bool',

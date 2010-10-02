@@ -113,7 +113,7 @@ has timer => (
 
 sub _build_timer {
     my $self = shift;
-    AE::timer 0, 20, sub {
+    AE::timer 0, 2, sub {
         foreach my $handle ($self->termcast_handle_list) {
             $self->shorten_buffer($handle);
         }
@@ -242,8 +242,9 @@ sub shorten_buffer {
     my $handle = shift;
 
     my $buffer = $handle->session->buffer;
-    $buffer =~ s/.*\e\[2J(?:\e2\[H)?//;
-    $handle->session->buffer($buffer);
+    $handle->session->fix_buffer_length();
+    $buffer =~ s/.+\e\[2[HJ]//sm
+        and $handle->session->buffer($buffer);
 }
 
 sub handle_termcast {
