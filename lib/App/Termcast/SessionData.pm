@@ -55,6 +55,14 @@ has stream_socket => (
     coerce => 1,
 );
 
+has last_active => (
+    is      => 'rw',
+    isa     => 'Int',
+    default => sub { time() },
+);
+
+sub mark_active { shift->last_active( time() ); }
+
 no Moose::Role;
 
 1;
