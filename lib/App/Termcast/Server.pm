@@ -198,7 +198,7 @@ sub BUILD {
                         );
 
                         #catch up
-                        $u_h->push_write($h->session->buffer);
+                        syswrite($u_h->fh, $h->session->buffer);
 
                         $self->get_termcast_handle($h->handle_id)->session->stream_handles->insert($u_h);
                     };
