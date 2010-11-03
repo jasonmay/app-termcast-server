@@ -243,7 +243,6 @@ sub shorten_buffer {
 
     $handle->session->fix_buffer_length();
     $handle->session->{buffer} =~ s/.+\e\[2J//s;
-    warn length($handle->session->buffer)
 }
 
 sub handle_termcast {
