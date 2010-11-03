@@ -241,10 +241,9 @@ sub shorten_buffer {
     my $self = shift;
     my $handle = shift;
 
-    my $buffer = $handle->session->buffer;
     $handle->session->fix_buffer_length();
-    $buffer =~ s/.+\e\[2[HJ]//sm
-        and $handle->session->buffer($buffer);
+    $handle->session->{buffer} =~ s/.+\e\[2J//s;
+    warn length($handle->session->buffer)
 }
 
 sub handle_termcast {
