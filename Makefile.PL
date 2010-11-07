@@ -10,7 +10,6 @@ requires 'KiokuDB';
 requires 'KiokuDB::Backend::DBI';
 requires 'Moose';
 requires 'Data::UUID::LibUUID';
-requires 'HTML::FromANSI';
 requires 'AnyEvent';
 requires 'MooseX::NonMoose';
 requires 'Set::Object';
