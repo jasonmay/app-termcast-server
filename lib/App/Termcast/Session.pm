@@ -3,7 +3,6 @@ package App::Termcast::Session;
 use Moose;
 use DateTime;
 use AnyEvent::Handle;
-use HTML::FromANSI;
 use namespace::autoclean;
 
 with qw(MooseX::Traits);
