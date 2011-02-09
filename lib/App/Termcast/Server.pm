@@ -45,10 +45,10 @@ has termcast_port => (
     default => 31337,
 );
 
-has server_port => (
+has server_socket => (
     is      => 'ro',
-    isa     => 'Int',
-    default => 9092,
+    isa     => 'Str',
+    default => 'connections.sock',
 );
 
 has termcasts => (
@@ -212,7 +212,7 @@ sub BUILD {
 
     };
 
-    tcp_server undef, $self->server_port, sub {
+    tcp_server 'unix/', $self->server_socket, sub {
         my ($fh, $host, $port) = @_;
         my $h = AnyEvent::Handle->new(
             fh => $fh,
