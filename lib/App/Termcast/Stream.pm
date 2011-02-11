@@ -51,6 +51,13 @@ has buffer => (
     },
 );
 
+has unix_socket_file => (
+    is     => 'rw',
+    isa    => 'Path::Class::File',
+    lazy   => 1,
+    coerce => 1,
+);
+
 sub fix_buffer_length {
     my $self = shift;
     my $len = $self->buffer_length;

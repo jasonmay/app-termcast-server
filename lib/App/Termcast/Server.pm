@@ -13,9 +13,7 @@ use Set::Object;
 
 use Data::UUID::LibUUID;
 
-use App::Termcast::Session;
 use App::Termcast::User;
-use App::Termcast::Handle;
 
 use Scalar::Util qw(weaken);
 
@@ -78,32 +76,16 @@ sub _build_kiokudb {
     KiokuDB->connect($self->dsn);
 }
 
-has termcast_handles => (
+# fd => Stream object
+has streams => (
     is      => 'rw',
-    isa     => 'HashRef',
+    isa     => 'HashRef[App::Termcast::Stream]',
     traits  => ['Hash'],
-    handles => {
-        set_termcast_handle    => 'set',
-        get_termcast_handle    => 'get',
-        delete_termcast_handle => 'delete',
-        termcast_handle_ids    => 'keys',
-        termcast_handle_list   => 'values',
-    },
     default => sub { +{} },
-);
-
-has server_handles => (
-    is      => 'rw',
-    isa     => 'HashRef',
-    traits  => ['Hash'],
     handles => {
-        set_server_handle    => 'set',
-        get_server_handle    => 'get',
-        delete_server_handle => 'delete',
-        server_handle_ids    => 'keys',
-        server_handle_list   => 'values',
-    },
-    default => sub { +{} },
+        delete_stream => 'delete',
+        stream        => 'get',
+    }
 );
 
 has timer => (
@@ -111,12 +93,19 @@ has timer => (
     builder => '_build_timer',
 );
 
+has server_handles => (
+    is      => 'ro',
+    isa     => 'Set::Object',
+    default => sub { Set::Object::set() },
+);
+
 sub _build_timer {
     my $self = shift;
     AE::timer 0, 2, sub {
-        foreach my $handle ($self->termcast_handle_list) {
-            $self->shorten_buffer($handle);
-        }
+        # XXX XXX XXX XXX
+        #foreach my $handle ($self->termcast_handle_list) {
+        #    $self->shorten_buffer($handle);
+        #}
     };
 }
 
@@ -127,7 +116,7 @@ sub BUILD {
     weaken(my $weakself = $self);
     tcp_server undef, $self->termcast_port, sub {
         my ($fh, $host, $port) = @_;
-        my $h = App::Termcast::Handle->new(
+        my $h = AnyEvent::Handle->new(
             fh => $fh,
             on_read => sub {
                 my $h = shift;
@@ -137,59 +126,58 @@ sub BUILD {
                 my ($h, $fatal, $error) = @_;
 
                 if ($fatal) {
-                    $weakself->delete_termcast_handle($h->handle_id);
-                    $weakself->send_disconnection_notice($h->handle_id);
+                    my $fd = fileno $h->fh;
+                    $weakself->delete_stream($fd);
+                    $weakself->send_disconnection_notice($fd);
 
-                    $_->destroy for $h->session->stream_handles->members;
+                    $_->destroy for $self->stream($fd)->unix_handles->members;
 
-                    unlink $h->handle_id;
                     $h->destroy;
                 }
                 else {
                     warn $error;
                 }
             },
-            handle_id => new_uuid_string(),
         );
-        my $cv = AnyEvent->condvar;
         my $user_object;
-
-        $self->set_termcast_handle($h->handle_id => $h);
 
         $h->push_read(
             line => sub {
                 my ($h, $line) = @_;
                 chomp $line;
                 my $user_object = $self->handle_auth($h, $line);
-                #$cv->send;
+
                 if (not defined $user_object) {
                     warn "Authentication failed";
-                    $self->delete_termcast_handle($h->handle_id);
+                    $self->delete_stream(fileno $h->fh);
                     $h->destroy;
                 }
                 else {
-                    my $session = App::Termcast::Session->with_traits(
-                        'App::Termcast::SessionData',
-                    )->new(
-                        user => $user_object,
-                    );
-
-                    $h->session($session);
-
 
                     (undef, my $file) = tempfile();
-                    unlink $file;
+
+                    # create stream object before unlinking $file
+                    # so type checking on socket_file doesn't explode
+                    my $stream
+                    = $self->streams->{fileno $h->fh}
+                    = App::Termcast::Stream->new(
+                        user        => $user_object,
+                        id          => new_uuid_string(),
+                        socket_file => $file,
+                    );
+
+                    unlink $file; # tempfile() generated
                     tcp_server 'unix/', $file, sub {
                         my ($fh, $host, $port) = @_;
 
-                        # we want to close over data from $h
                         my $u_h = AnyEvent::Handle->new(
                             fh => $fh,
                             on_error => sub {
                                 my ($u_h, $fatal, $error) = @_;
-                                $h->session->stream_handles->remove($u_h);
+                                $stream->unix_handles->remove($u_h);
                                 if ($fatal) {
                                     $u_h->destroy;
+                                    unlink $file;
                                 }
                                 else {
                                     warn $error;
@@ -198,14 +186,12 @@ sub BUILD {
                         );
 
                         #catch up
-                        syswrite($u_h->fh, $h->session->buffer);
+                        syswrite($u_h->fh, $stream->buffer);
 
-                        $self->get_termcast_handle($h->handle_id)->session->stream_handles->insert($u_h);
+                        $stream->unix_handles->insert($u_h);
                     };
 
-                    require Path::Class::File;
-                    $self->get_termcast_handle($h->handle_id)->session->stream_socket($file);
-                    $self->send_connection_notice($h->handle_id);
+                    $self->send_connection_notice($h);
                 }
             },
         );
@@ -233,7 +219,7 @@ sub BUILD {
         );
         my $handle_id = new_uuid_string();
 
-        $self->set_server_handle($handle_id => $h);
+        $self->server_handles->insert($h);
     };
 }
 
@@ -241,6 +227,7 @@ sub shorten_buffer {
     my $self = shift;
     my $handle = shift;
 
+    return unless $handle->session;
     $handle->session->fix_buffer_length();
     $handle->session->{buffer} =~ s/.+\e\[2J//s;
 }
@@ -281,12 +268,69 @@ sub create_user {
     return $user_object;
 }
 
-sub handle_auth {
+sub handle_metadata {
     my $self   = shift;
     my $handle = shift;
+
+    my $get_next_line;
+
+    my %properties;
+
+    my $settings_threshold = 30; # 30 lines of settings should be plenty
+    my $settings_lines = 0;
+
+    # cv + loop might be better here
+    $get_next_line = sub {
+        $handle->push_read(
+            line => sub {
+                my ($handle, $line) = @_;
+                return if $settings_lines > $settings_threshold
+                    or lc($line) eq 'finish';
+
+                ++$settings_lines;
+                my ($key, $value) = split ' ', $line, 2;
+                $properties{$key} = $value;
+
+                $get_next_line->();
+            }
+        );
+    };
+
+    $get_next_line->();
+
+    while (my ($p_key, $p_value) = each %properties) {
+        $self->dispatch_metadata($p_key, $p_value);
+    }
+}
+
+sub dispatch_metadata {
+    my $self = shift;
+    my ($property_key, $property_value) = @_;
+
+    my %dispatch = (
+
+        hello => sub {
+            $self->handle_auth($property_value);
+        },
+
+        geometry => sub {
+        }
+    );
+}
+
+sub handle_geometry {
+    my $self = shift;
+    my $line = shift;
+
+    my ($cols, $lines) = $line =~ /(\S+) \s+ (\S+)/x;
+    #TODO
+}
+
+sub handle_auth {
+    my $self   = shift;
     my $line   = shift;
 
-    my ($user, $pass) = $line =~ /hello \s+ (\S+) \s+ (\S+)/x;
+    my ($user, $pass) = $line =~ /(\S+) \s+ (\S+)/x;
 
     my $user_object;
     {
@@ -317,15 +361,13 @@ sub handle_server {
                         response => 'sessions',
                         sessions => [
                             map {
-                            my $tc_handle = $self->get_termcast_handle($_);
-
                             +{
-                                session_id => $_,
-                                user       => $tc_handle->session->user->id,
-                                socket     => $tc_handle->session->stream_socket->stringify,
-                                last_active => $tc_handle->session->last_active,
+                                session_id  => $_->id,
+                                user        => $_->user->id,
+                                socket      => $_->stream_socket->stringify,
+                                last_active => $_->last_active,
                             }
-                            } $self->termcast_handle_ids
+                            } values %{$self->streams}
                         ],
                     }
                 );
@@ -336,13 +378,14 @@ sub handle_server {
 
 sub send_connection_notice {
     my $self      = shift;
-    my $handle_id = shift;
+    my $handle = shift;
 
+    my $stream = $self->stream(fileno $handle->fh);
     my $data = {
-        session_id => $handle_id,
-        user       => $self->get_termcast_handle($handle_id)->session->user->id,
-        socket     => $self->get_termcast_handle($handle_id)->session->stream_socket->stringify,
-        last_active => $self->get_termcast_handle($handle_id)->session->last_active,
+        session_id  => $stream->id,
+        user        => $stream->user->id,
+        socket      => $stream->unix_socket_file->stringify,
+        last_active => $stream->last_active,
     };
 
     foreach my $handle ($self->server_handle_list) {
@@ -357,13 +400,13 @@ sub send_connection_notice {
 
 sub send_disconnection_notice {
     my $self      = shift;
-    my $handle_id = shift;
+    my $stream_id = shift;
 
-    foreach my $handle ($self->server_handle_list) {
-        $handle->push_write(
+    foreach my $server_handle ($self->server_handles->members) {
+        $server_handle->push_write(
             json => {
                 notice     => 'disconnect',
-                session_id => $handle_id,
+                session_id => $stream_id,
             }
         );
     }
