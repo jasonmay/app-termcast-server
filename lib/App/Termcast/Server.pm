@@ -1,4 +1,4 @@
-#!::usr::bin::env perl
+#!/usr/bin/env perl
 package App::Termcast::Server;
 
 use AnyEvent;
