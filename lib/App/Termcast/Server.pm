@@ -141,61 +141,46 @@ sub BUILD {
         );
         my $user_object;
 
-        $h->push_read(
-            line => sub {
-                my ($h, $line) = @_;
-                chomp $line;
-                my $user_object = $self->handle_auth($h, $line);
+        $self->handle_metadata($h) or return;
 
-                if (not defined $user_object) {
-                    warn "Authentication failed";
-                    $self->delete_stream(fileno $h->fh);
-                    $h->destroy;
-                }
-                else {
+        my $file = ( tempfile() )[1];
 
-                    (undef, my $file) = tempfile();
-
-                    # create stream object before unlinking $file
-                    # so type checking on socket_file doesn't explode
-                    my $stream
-                    = $self->streams->{fileno $h->fh}
-                    = App::Termcast::Stream->new(
-                        user        => $user_object,
-                        id          => new_uuid_string(),
-                        socket_file => $file,
-                    );
-
-                    unlink $file; # tempfile() generated
-                    tcp_server 'unix/', $file, sub {
-                        my ($fh, $host, $port) = @_;
-
-                        my $u_h = AnyEvent::Handle->new(
-                            fh => $fh,
-                            on_error => sub {
-                                my ($u_h, $fatal, $error) = @_;
-                                $stream->unix_handles->remove($u_h);
-                                if ($fatal) {
-                                    $u_h->destroy;
-                                    unlink $file;
-                                }
-                                else {
-                                    warn $error;
-                                }
-                            },
-                        );
-
-                        #catch up
-                        syswrite($u_h->fh, $stream->buffer);
-
-                        $stream->unix_handles->insert($u_h);
-                    };
-
-                    $self->send_connection_notice($h);
-                }
-            },
+        # create stream object before unlinking $file
+        # so type checking on socket_file doesn't explode
+        my $stream
+        = $self->streams->{fileno $h->fh}
+        = App::Termcast::Stream->new(
+            user        => $user_object,
+            id          => new_uuid_string(),
+            socket_file => $file,
         );
 
+        unlink $file; # tempfile() generated
+        tcp_server 'unix/', $file, sub {
+            my ($fh, $host, $port) = @_;
+
+            my $u_h = AnyEvent::Handle->new(
+                fh => $fh,
+                on_error => sub {
+                    my ($u_h, $fatal, $error) = @_;
+                    $stream->unix_handles->remove($u_h);
+                    if ($fatal) {
+                        $u_h->destroy;
+                        unlink $file;
+                    }
+                    else {
+                        warn $error;
+                    }
+                },
+            );
+
+            #catch up
+            syswrite($u_h->fh, $stream->buffer);
+
+            $stream->unix_handles->insert($u_h);
+        };
+
+        $self->send_connection_notice($h);
     };
 
     tcp_server 'unix/', $self->server_socket, sub {
@@ -279,38 +264,42 @@ sub handle_metadata {
     my $settings_threshold = 30; # 30 lines of settings should be plenty
     my $settings_lines = 0;
 
-    # cv + loop might be better here
-    $get_next_line = sub {
+    my $returned_line;
+    do {
+        my $cv = AnyEvent->condvar;
         $handle->push_read(
             line => sub {
                 my ($handle, $line) = @_;
-                return if $settings_lines > $settings_threshold
-                    or lc($line) eq 'finish';
 
                 ++$settings_lines;
                 my ($key, $value) = split ' ', $line, 2;
                 $properties{$key} = $value;
 
-                $get_next_line->();
+                $returned_line = $line;
+                $cv->send;
             }
         );
-    };
-
-    $get_next_line->();
+        $cv->recv();
+    } until lc($returned_line) eq 'finish'
+        or $settings_lines > $settings_threshold;
 
     while (my ($p_key, $p_value) = each %properties) {
-        $self->dispatch_metadata($p_key, $p_value);
+        $self->dispatch_metadata($handle, $p_key, $p_value)
+        or do {
+            $handle->destroy;
+            return undef;
+        };
     }
 }
 
 sub dispatch_metadata {
     my $self = shift;
-    my ($property_key, $property_value) = @_;
+    my ($handle, $property_key, $property_value) = @_;
 
     my %dispatch = (
 
         hello => sub {
-            $self->handle_auth($property_value);
+            return $self->handle_auth($handle, $property_value);
         },
 
         geometry => sub {
@@ -328,6 +317,7 @@ sub handle_geometry {
 
 sub handle_auth {
     my $self   = shift;
+    my $handle = shift;
     my $line   = shift;
 
     my ($user, $pass) = $line =~ /(\S+) \s+ (\S+)/x;
@@ -340,10 +330,13 @@ sub handle_auth {
     }
 
     if ($user_object->check_password($pass)) {
-        return $user_object;
+        warn "Authentication failed";
+        $self->delete_stream(fileno $handle->fh);
+        $handle->destroy;
+        return undef;
     }
     else {
-        return undef;
+        return $user_object;
     }
 }
 
