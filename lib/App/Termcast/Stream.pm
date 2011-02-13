@@ -1,17 +1,28 @@
 package App::Termcast::Stream;
 use Moose;
-use Set::Object;
+use Reflex::Collection;
+use Reflex::Stream;
 
-has termcast_handle => (
-    is => 'ro',
-    isa => 'AnyEvent::Handle',
-    required => 1,
+extends 'Reflex::Base';
+
+with 'Reflex::Role::Accepting', 'Reflex::Role::Streaming';
+
+has handle => (
+    is        => 'rw',
+    isa       => 'FileHandle',
+    required  => 1,
 );
 
-has unix_handles => (
-    is => 'ro',
-    isa => 'Set::Object',
-    default => sub { Set::Object::set() },
+has listener => (
+    is        => 'rw',
+    isa       => 'FileHandle',
+    required  => 1,
+);
+
+has_many unix_sockets => (
+    handles => {
+        remember_unix_socket => 'remember',
+    },
 );
 
 has stream_id => (
@@ -34,7 +45,7 @@ has cols => (
 
 has user => (
     is      => 'ro',
-    isa     => 'Str',
+    isa     => 'App::Termcast::User',
     required => 1,
 );
 
@@ -45,7 +56,7 @@ has buffer => (
     traits  => ['String'],
     default => '',
     handles => {
-        add_text      => 'append',
+        add_to_buffer => 'append',
         buffer_length => 'length',
         clear_buffer  => 'clear',
     },
@@ -53,10 +64,81 @@ has buffer => (
 
 has unix_socket_file => (
     is     => 'rw',
-    isa    => 'Path::Class::File',
-    lazy   => 1,
-    coerce => 1,
+    isa    => 'Str',
 );
+
+# pass this down for reference
+has handle_collection => (
+    is     => 'ro',
+    isa    => 'Reflex::Collection',
+    required => 1,
+);
+
+sub on_listener_accept {
+    my ($self, $args) = @_;
+    warn "accept";
+
+    $self->remember_unix_socket(
+        Reflex::Stream->new(
+            handle => $args->{socket},
+            rd     => 1,
+        ),
+    );
+
+    $args->{socket}->syswrite($self->buffer);
+    $self->send_connection_notice($args->{socket});
+}
+
+sub send_connection_notice {
+    my $self      = shift;
+
+    my %response = (
+        notice     => 'connect',
+        connection => {
+            session_id  => $self->id,
+            user        => $self->user->id,
+            socket      => $self->unix_socket_file,
+            last_active => $self->last_active,
+        }
+    );
+
+    foreach my $handle ( values %{$self->handle_collection->objects} ) {
+        my $json = JSON::encode_json(\%response);
+        $handle->syswrite($json);
+    }
+}
+
+sub send_disconnection_notice {
+    my $self = shift;
+
+    foreach my $handle (values %{$self->handle_collection->objects} ) {
+        my %response = (
+            notice     => 'disconnect',
+            session_id => $self->id,
+        );
+
+        my $json = JSON::encode_json(\%response);
+        $handle->syswrite($json);
+    }
+}
+
+sub on_handle_data {
+    my ($self, $args) = @_;
+    warn "data";
+
+    $self->add_to_buffer($args->{data});
+    $_->put($args->{data}) for values %{ $self->unix_sockets->objects };
+
+    $self->mark_active();
+}
+
+sub on_handle_error {
+    my ($self, $args) = @_;
+    warn "error";
+
+    $self->send_disconnection_notice(fileno $args->{socket});
+    $_->close() for values %{ $self->unix_sockets->objects };
+}
 
 sub fix_buffer_length {
     my $self = shift;

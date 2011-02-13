@@ -3,4 +3,4 @@ use strict;
 use warnings;
 use App::Termcast::Server;
 
-App::Termcast::Server->new->run;
+App::Termcast::Server->new->run_all;

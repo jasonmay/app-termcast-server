@@ -1,25 +1,29 @@
 #!/usr/bin/env perl
 package App::Termcast::Server;
 
-use AnyEvent;
-use AnyEvent::Socket;
-use AnyEvent::Handle;
+use Reflex::Collection;
 
 use Moose;
+
 use KiokuDB;
 use KiokuX::User::Util qw(crypt_password);
-
-use Set::Object;
 
 use Data::UUID::LibUUID;
 
 use App::Termcast::User;
-
-use Scalar::Util qw(weaken);
+use App::Termcast::Stream;
+use App::Termcast::Service::Stream;
 
 use File::Temp qw(tempfile);
 
+use IO qw(Socket::INET Socket::UNIX);
+
 use namespace::autoclean;
+
+extends 'Reflex::Base';
+
+with 'Reflex::Role::Accepting' => { listener => 'termcast_listener' },
+     'Reflex::Role::Accepting' => { listener => 'service_listener'  };
 
 $|++;
 
@@ -37,6 +41,45 @@ TODO
 
 =cut
 
+has termcast_listener => (
+    is  => 'ro',
+    isa => 'FileHandle',
+    lazy => 1,
+    builder => '_build_termcast_listener',
+);
+
+sub _build_termcast_listener {
+    my $self = shift;
+
+    my $listener = IO::Socket::INET->new(
+        LocalPort => $self->termcast_port,
+        Listen    => 1,
+        Reuse     => 1,
+    );
+
+    return $listener;
+}
+
+has service_listener => (
+    is  => 'ro',
+    isa => 'FileHandle',
+    lazy => 1,
+    builder => '_build_service_listener',
+);
+
+
+sub _build_service_listener {
+    my $self = shift;
+
+    unlink $self->server_socket;
+    my $listener = IO::Socket::UNIX->new(
+        Local => $self->server_socket,
+        Listen    => 1,
+    ) or die $!;
+
+    return $listener;
+}
+
 has termcast_port => (
     is  => 'ro',
     isa => 'Int',
@@ -47,13 +90,6 @@ has server_socket => (
     is      => 'ro',
     isa     => 'Str',
     default => 'connections.sock',
-);
-
-has termcasts => (
-    is      => 'ro',
-    isa     => 'HashRef',
-    traits  => ['Hash'],
-    default => sub { +{} },
 );
 
 has dsn => (
@@ -73,139 +109,65 @@ has kiokudb => (
 sub _build_kiokudb {
     my $self = shift;
     die "DSN must be provided" unless $self->dsn;
-    KiokuDB->connect($self->dsn);
+    KiokuDB->connect($self->dsn, create => 1);
 }
 
-# fd => Stream object
-has streams => (
-    is      => 'rw',
-    isa     => 'HashRef[App::Termcast::Stream]',
-    traits  => ['Hash'],
-    default => sub { +{} },
+has_many streams => (
     handles => {
-        delete_stream => 'delete',
-        stream        => 'get',
+        remember_stream => 'remember',
+        forget_stream   => 'forget',
     }
 );
 
-has timer => (
-    is  => 'ro',
-    builder => '_build_timer',
+has_many handles => (
+    handles => {
+        remember_handle => 'remember',
+        forget_handle   => 'forget',
+    }
 );
 
-has server_handles => (
-    is      => 'ro',
-    isa     => 'Set::Object',
-    default => sub { Set::Object::set() },
-);
+# TODO: session timer?
 
-sub _build_timer {
-    my $self = shift;
-    AE::timer 0, 2, sub {
-        # XXX XXX XXX XXX
-        #foreach my $handle ($self->termcast_handle_list) {
-        #    $self->shorten_buffer($handle);
-        #}
-    };
+sub on_service_listener_accept {
+    warn "on_service_listener_accept";
+    my ($self, $args) = @_;
+
+    $self->remember_handle(
+        App::Termcast::Service::Stream->new(
+            handle => $args->{socket},
+            stream_collection => $self->streams,
+        )
+    );
 }
 
+sub on_termcast_listener_accept {
+    warn "on_termcast_listener_accept";
+    my ($self, $args) = @_;
 
-sub BUILD {
-    my $self = shift;
+    # handle metadata here
+    $self->handle_metadata($args->{socket})
+        or do { close $args->{socket}; return };
 
-    weaken(my $weakself = $self);
-    tcp_server undef, $self->termcast_port, sub {
-        my ($fh, $host, $port) = @_;
-        my $h = AnyEvent::Handle->new(
-            fh => $fh,
-            on_read => sub {
-                my $h = shift;
-                $weakself->handle_termcast($h);
-            },
-            on_error => sub {
-                my ($h, $fatal, $error) = @_;
+    my $file = ( tempfile() )[1]; unlink $file;
 
-                if ($fatal) {
-                    my $fd = fileno $h->fh;
-                    $weakself->delete_stream($fd);
-                    $weakself->send_disconnection_notice($fd);
+    my $listener = IO::Socket::UNIX->new(
+        Local => $file,
+        Listen => 1,
+    );
 
-                    $_->destroy for $self->stream($fd)->unix_handles->members;
+    # FIXME
+    my $user_object = $self->handle_auth($args->{socket}, 'anon asdf');
 
-                    $h->destroy;
-                }
-                else {
-                    warn $error;
-                }
-            },
-        );
-        my $user_object;
-
-        $self->handle_metadata($h) or return;
-
-        my $file = ( tempfile() )[1];
-
-        # create stream object before unlinking $file
-        # so type checking on socket_file doesn't explode
-        my $stream
-        = $self->streams->{fileno $h->fh}
-        = App::Termcast::Stream->new(
+    $self->remember_stream(
+        App::Termcast::Stream->new(
+            handle      => $args->{socket},
+            listener    => $listener,
             user        => $user_object,
-            id          => new_uuid_string(),
-            socket_file => $file,
-        );
-
-        unlink $file; # tempfile() generated
-        tcp_server 'unix/', $file, sub {
-            my ($fh, $host, $port) = @_;
-
-            my $u_h = AnyEvent::Handle->new(
-                fh => $fh,
-                on_error => sub {
-                    my ($u_h, $fatal, $error) = @_;
-                    $stream->unix_handles->remove($u_h);
-                    if ($fatal) {
-                        $u_h->destroy;
-                        unlink $file;
-                    }
-                    else {
-                        warn $error;
-                    }
-                },
-            );
-
-            #catch up
-            syswrite($u_h->fh, $stream->buffer);
-
-            $stream->unix_handles->insert($u_h);
-        };
-
-        $self->send_connection_notice($h);
-    };
-
-    tcp_server 'unix/', $self->server_socket, sub {
-        my ($fh, $host, $port) = @_;
-        my $h = AnyEvent::Handle->new(
-            fh => $fh,
-            on_read => sub {
-                my $h = shift;
-                $self->handle_server($h);
-            },
-            on_error => sub {
-                my ($h, $fatal, $error) = @_;
-
-                if ($fatal) {
-                    $h->destroy;
-                }
-                else {
-                    warn $error;
-                }
-            }
-        );
-        my $handle_id = new_uuid_string();
-
-        $self->server_handles->insert($h);
-    };
+            handle_collection => $self->handles,
+            stream_id    => new_uuid_string(),
+            unix_socket_file => $file,
+        )
+    );
 }
 
 sub shorten_buffer {
@@ -215,22 +177,6 @@ sub shorten_buffer {
     return unless $handle->session;
     $handle->session->fix_buffer_length();
     $handle->session->{buffer} =~ s/.+\e\[2J//s;
-}
-
-sub handle_termcast {
-    my $self = shift;
-    my $h    = shift;
-
-    my $session = $h->session;
-
-    $session->add_text($h->rbuf);
-    $session->mark_active();
-
-    for ($session->stream_handles->members) {
-        syswrite($_->fh, $h->rbuf);
-    }
-
-    $h->{rbuf} = '';
 }
 
 sub create_user {
@@ -257,39 +203,34 @@ sub handle_metadata {
     my $self   = shift;
     my $handle = shift;
 
-    my $get_next_line;
+    return 1; #XXX
+    #my $get_next_line;
 
-    my %properties;
+    #my %properties;
 
-    my $settings_threshold = 30; # 30 lines of settings should be plenty
-    my $settings_lines = 0;
+    #my $settings_threshold = 30; # 30 lines of settings should be plenty
+    #my $settings_lines = 0;
 
-    my $returned_line;
-    do {
-        my $cv = AnyEvent->condvar;
-        $handle->push_read(
-            line => sub {
-                my ($handle, $line) = @_;
+    #my $returned_line;
+    #my $buf;
+    #do {
+    #    chomp( $buf = $handle->sysread() );
 
-                ++$settings_lines;
-                my ($key, $value) = split ' ', $line, 2;
-                $properties{$key} = $value;
+    #    ++$settings_lines;
 
-                $returned_line = $line;
-                $cv->send;
-            }
-        );
-        $cv->recv();
-    } until lc($returned_line) eq 'finish'
-        or $settings_lines > $settings_threshold;
+    #    my ($key, $value) = split ' ', $buf, 2;
+    #    $properties{$key} = $value;
 
-    while (my ($p_key, $p_value) = each %properties) {
-        $self->dispatch_metadata($handle, $p_key, $p_value)
-        or do {
-            $handle->destroy;
-            return undef;
-        };
-    }
+    #} until lc($buf) eq 'finish'
+    #    or $settings_lines > $settings_threshold;
+
+    #while (my ($p_key, $p_value) = each %properties) {
+    #    $self->dispatch_metadata($handle, $p_key, $p_value)
+    #    or do {
+    #        close $handle;
+    #        return undef;
+    #    };
+    #}
 }
 
 sub dispatch_metadata {
@@ -329,84 +270,15 @@ sub handle_auth {
                     || $self->create_user($user, $pass);
     }
 
-    if ($user_object->check_password($pass)) {
+    # XXX probably no crypt_password here
+    if ($user_object->check_password(crypt_password $pass)) {
         warn "Authentication failed";
-        $self->delete_stream(fileno $handle->fh);
-        $handle->destroy;
+        $handle->close();
         return undef;
     }
     else {
         return $user_object;
     }
-}
-
-sub handle_server {
-    my $self = shift;
-    my $handle = shift;
-
-    $handle->push_read(
-        json => sub {
-            my ($h, $data) = @_;
-
-            if ($data->{request} eq 'sessions') {
-                $h->push_write(
-                    json => {
-                        response => 'sessions',
-                        sessions => [
-                            map {
-                            +{
-                                session_id  => $_->id,
-                                user        => $_->user->id,
-                                socket      => $_->stream_socket->stringify,
-                                last_active => $_->last_active,
-                            }
-                            } values %{$self->streams}
-                        ],
-                    }
-                );
-            }
-        }
-    );
-}
-
-sub send_connection_notice {
-    my $self      = shift;
-    my $handle = shift;
-
-    my $stream = $self->stream(fileno $handle->fh);
-    my $data = {
-        session_id  => $stream->id,
-        user        => $stream->user->id,
-        socket      => $stream->unix_socket_file->stringify,
-        last_active => $stream->last_active,
-    };
-
-    foreach my $handle ($self->server_handle_list) {
-        $handle->push_write(
-            json => {
-                notice     => 'connect',
-                connection => $data,
-            }
-        );
-    }
-}
-
-sub send_disconnection_notice {
-    my $self      = shift;
-    my $stream_id = shift;
-
-    foreach my $server_handle ($self->server_handles->members) {
-        $server_handle->push_write(
-            json => {
-                notice     => 'disconnect',
-                session_id => $stream_id,
-            }
-        );
-    }
-}
-
-sub run {
-    AE::cv->recv;
 }
 
 __PACKAGE__->meta->make_immutable;
