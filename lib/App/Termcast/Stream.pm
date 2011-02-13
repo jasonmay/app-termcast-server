@@ -130,6 +130,10 @@ sub on_handle_data {
     my ($self, $args) = @_;
 
     $self->add_to_buffer($args->{data});
+
+    if ($self->{buffer} =~ /(?<!\e\[H)\e\[2J/) {
+        $self->{buffer} =~ s/.+\e\[2J/\e\[H.\e\[2J/s;
+    }
     $_->handle->syswrite($args->{data}) for values %{ $self->unix_sockets->objects };
 
     $self->mark_active();

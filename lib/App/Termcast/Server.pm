@@ -183,14 +183,14 @@ sub on_termcast_listener_accept {
     $stream->send_connection_notice;
 }
 
-sub shorten_buffer {
-    my $self = shift;
-    my $handle = shift;
-
-    return unless $handle->session;
-    $handle->session->fix_buffer_length();
-    $handle->session->{buffer} =~ s/.+\e\[2J//s;
-}
+#sub shorten_buffer {
+#    my $self = shift;
+#    my $handle = shift;
+#
+#    return unless $handle->session;
+#    $handle->session->fix_buffer_length();
+#    $handle->session->{buffer} =~ s/.+\e\[2J//s;
+#}
 
 sub create_user {
     my $self = shift;
