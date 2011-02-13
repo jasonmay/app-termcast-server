@@ -130,7 +130,7 @@ sub on_handle_data {
     my ($self, $args) = @_;
 
     $self->add_to_buffer($args->{data});
-    $_->put($args->{data}) for values %{ $self->unix_sockets->objects };
+    $_->handle->syswrite($args->{data}) for values %{ $self->unix_sockets->objects };
 
     $self->mark_active();
 }
