@@ -144,10 +144,6 @@ sub on_termcast_listener_accept {
     warn "on_termcast_listener_accept";
     my ($self, $args) = @_;
 
-    # handle metadata here
-    $self->handle_metadata($args->{socket})
-        or do { close $args->{socket}; return };
-
     my $file = ( tempfile() )[1]; unlink $file;
 
     my $listener = IO::Socket::UNIX->new(
@@ -155,19 +151,37 @@ sub on_termcast_listener_accept {
         Listen => 1,
     );
 
-    # FIXME
-    my $user_object = $self->handle_auth($args->{socket}, 'anon asdf');
+    # handle metadata here
+    my $results = $self->handle_metadata($args->{socket});
 
-    $self->remember_stream(
-        App::Termcast::Stream->new(
-            handle      => $args->{socket},
-            listener    => $listener,
-            user        => $user_object,
-            handle_collection => $self->handles,
-            stream_id    => new_uuid_string(),
-            unix_socket_file => $file,
-        )
+    my %stream_params = (
+        handle            => $args->{socket},
+        listener          => $listener,
+        handle_collection => $self->handles,
+        stream_id         => new_uuid_string(),
+        unix_socket_file  => $file,
     );
+
+    $stream_params{user} = $results->{hello} or do {
+        $args->{socket}->syswrite("Authentication failed.\n");
+        warn "auth failed";
+
+        # use noop stream to prevent inf loop of reconnects
+        $self->remember_stream(
+            Reflex::Stream->new( handle => $args->{socket} )
+        );
+
+        return;
+    };
+
+    if ($results->{geom}) {
+        @stream_params{'cols', 'lines'} = @{$results->{geom}};
+    }
+
+    my $stream = App::Termcast::Stream->new(%stream_params);
+
+    $self->remember_stream($stream);
+
 }
 
 sub shorten_buffer {
@@ -203,62 +217,64 @@ sub handle_metadata {
     my $self   = shift;
     my $handle = shift;
 
-    return 1; #XXX
-    #my $get_next_line;
+    my $get_next_line;
 
-    #my %properties;
+    my %properties;
 
-    #my $settings_threshold = 30; # 30 lines of settings should be plenty
-    #my $settings_lines = 0;
+    my $settings_threshold = 30; # 30 lines of settings should be plenty
+    my $settings_lines = 0;
 
-    #my $returned_line;
-    #my $buf;
-    #do {
-    #    chomp( $buf = $handle->sysread() );
+    my $returned_line;
+    my $buf;
+    {
+        defined($buf = <$handle>) or redo; chomp $buf;
 
-    #    ++$settings_lines;
+        ++$settings_lines;
 
-    #    my ($key, $value) = split ' ', $buf, 2;
-    #    $properties{$key} = $value;
+        last if lc($buf||'') eq 'finish';
 
-    #} until lc($buf) eq 'finish'
-    #    or $settings_lines > $settings_threshold;
+        my ($key, $value) = split ' ', $buf, 2;
+        $properties{$key} = $value;
 
-    #while (my ($p_key, $p_value) = each %properties) {
-    #    $self->dispatch_metadata($handle, $p_key, $p_value)
-    #    or do {
-    #        close $handle;
-    #        return undef;
-    #    };
-    #}
+        $settings_lines > $settings_threshold or redo;
+    }
+
+
+    my %results;
+    while (my ($p_key, $p_value) = each %properties) {
+        $results{$p_key} = $self->dispatch_metadata($p_key, $p_value);
+    }
+
+    return \%results;
 }
 
 sub dispatch_metadata {
     my $self = shift;
-    my ($handle, $property_key, $property_value) = @_;
+    my ($property_key, $property_value) = @_;
 
     my %dispatch = (
-
         hello => sub {
-            return $self->handle_auth($handle, $property_value);
+            return $self->handle_auth($property_value);
         },
-
-        geometry => sub {
+        geom => sub {
+            return $self->handle_geometry($property_value);
         }
     );
+
+    return $dispatch{lc $property_key}->();
 }
 
 sub handle_geometry {
     my $self = shift;
     my $line = shift;
 
-    my ($cols, $lines) = $line =~ /(\S+) \s+ (\S+)/x;
-    #TODO
+    my ($cols, $lines) = split ' ', $line;
+
+    return [$cols, $lines];
 }
 
 sub handle_auth {
     my $self   = shift;
-    my $handle = shift;
     my $line   = shift;
 
     my ($user, $pass) = $line =~ /(\S+) \s+ (\S+)/x;
@@ -271,13 +287,11 @@ sub handle_auth {
     }
 
     # XXX probably no crypt_password here
-    if ($user_object->check_password(crypt_password $pass)) {
-        warn "Authentication failed";
-        $handle->close();
-        return undef;
+    if ($user_object->check_password($pass)) {
+        return $user_object;
     }
     else {
-        return $user_object;
+        return undef;
     }
 }
 

@@ -28,12 +28,7 @@ sub handle_server {
             response => 'sessions',
             sessions => [
                 map {
-                +{
-                    session_id  => $_->stream_id,
-                    user        => $_->user->id,
-                    socket      => $_->unix_socket_file,
-                    last_active => $_->last_active,
-                }
+                $_->property_data
                 } values %{$self->stream_collection->objects}
             ],
         );

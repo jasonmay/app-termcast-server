@@ -85,8 +85,19 @@ sub on_listener_accept {
         ),
     );
 
-    $args->{socket}->syswrite($self->buffer);
-    $self->send_connection_notice($args->{socket});
+    #$args->{socket}->syswrite($self->buffer);
+    #$self->send_connection_notice($args->{socket});
+}
+
+sub property_data {
+    my $self = shift;
+    return {
+            session_id  => $self->stream_id,
+            user        => $self->user->id,
+            socket      => $self->unix_socket_file,
+            last_active => $self->last_active,
+            geometry    => [$self->cols, $self->lines],
+    };
 }
 
 sub send_connection_notice {
@@ -94,17 +105,12 @@ sub send_connection_notice {
 
     my %response = (
         notice     => 'connect',
-        connection => {
-            session_id  => $self->stream_id,
-            user        => $self->user->id,
-            socket      => $self->unix_socket_file,
-            last_active => $self->last_active,
-        }
+        connection => $self->property_data,
     );
 
-    foreach my $handle ( values %{$self->handle_collection->objects} ) {
+    foreach my $stream ( values %{$self->handle_collection->objects} ) {
         my $json = JSON::encode_json(\%response);
-        $handle->syswrite($json);
+        $stream->handle->syswrite($json);
     }
 }
 
