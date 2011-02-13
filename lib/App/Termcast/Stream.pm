@@ -76,7 +76,6 @@ has handle_collection => (
 
 sub on_listener_accept {
     my ($self, $args) = @_;
-    warn "accept";
 
     $self->remember_unix_socket(
         Reflex::Stream->new(
@@ -130,7 +129,6 @@ sub send_disconnection_notice {
 
 sub on_handle_data {
     my ($self, $args) = @_;
-    warn "data";
 
     $self->add_to_buffer($args->{data});
     $_->put($args->{data}) for values %{ $self->unix_sockets->objects };

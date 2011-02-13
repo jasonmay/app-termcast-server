@@ -129,7 +129,6 @@ has_many handles => (
 # TODO: session timer?
 
 sub on_service_listener_accept {
-    warn "on_service_listener_accept";
     my ($self, $args) = @_;
 
     $self->remember_handle(
@@ -141,7 +140,6 @@ sub on_service_listener_accept {
 }
 
 sub on_termcast_listener_accept {
-    warn "on_termcast_listener_accept";
     my ($self, $args) = @_;
 
     my $file = ( tempfile() )[1]; unlink $file;
