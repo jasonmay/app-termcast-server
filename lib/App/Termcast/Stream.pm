@@ -84,8 +84,7 @@ sub on_listener_accept {
         ),
     );
 
-    #$args->{socket}->syswrite($self->buffer);
-    #$self->send_connection_notice($args->{socket});
+    $args->{socket}->syswrite($self->buffer);
 }
 
 sub property_data {
