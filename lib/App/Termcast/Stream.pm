@@ -95,7 +95,7 @@ sub send_connection_notice {
     my %response = (
         notice     => 'connect',
         connection => {
-            session_id  => $self->id,
+            session_id  => $self->stream_id,
             user        => $self->user->id,
             socket      => $self->unix_socket_file,
             last_active => $self->last_active,
