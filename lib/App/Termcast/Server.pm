@@ -182,6 +182,7 @@ sub on_termcast_listener_accept {
 
     $self->remember_stream($stream);
 
+    $stream->send_connection_notice;
 }
 
 sub shorten_buffer {
