@@ -10,7 +10,7 @@ requires 'KiokuDB';
 requires 'KiokuDB::Backend::DBI';
 requires 'Moose';
 requires 'Data::UUID::LibUUID';
-requires 'AnyEvent';
+requires 'Reflex';
 requires 'MooseX::NonMoose';
 requires 'Set::Object';
 requires 'namespace::autoclean';
