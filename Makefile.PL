@@ -1,6 +1,6 @@
 use inc::Module::Install;
 
-name           'App::Termcast::Server';
+name           'App-Termcast-Server';
 all_from       'lib/App/Termcast/Server.pm';
 
 build_requires 'Test::More';
