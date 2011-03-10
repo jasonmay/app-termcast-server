@@ -216,35 +216,11 @@ sub handle_metadata {
     my $self   = shift;
     my $handle = shift;
 
-    my $get_next_line;
+    # only one metadata line in the beginning
+    chomp(my $buf = <$handle>);
+    my ($key, $value) = split ' ', $buf, 2;
 
-    my %properties;
-
-    my $settings_threshold = 30; # 30 lines of settings should be plenty
-    my $settings_lines = 0;
-
-    my $returned_line;
-    my $buf;
-    {
-        defined($buf = <$handle>) or redo; chomp $buf;
-
-        ++$settings_lines;
-
-        last if lc($buf||'') eq 'finish';
-
-        my ($key, $value) = split ' ', $buf, 2;
-        $properties{$key} = $value;
-
-        $settings_lines > $settings_threshold or redo;
-    }
-
-
-    my %results;
-    while (my ($p_key, $p_value) = each %properties) {
-        $results{$p_key} = $self->dispatch_metadata($p_key, $p_value);
-    }
-
-    return \%results;
+    return { $key => $self->dispatch_metadata($key, $value) };
 }
 
 sub dispatch_metadata {
@@ -255,9 +231,6 @@ sub dispatch_metadata {
         hello => sub {
             return $self->handle_auth($property_value);
         },
-        geom => sub {
-            return $self->handle_geometry($property_value);
-        }
     );
 
     return $dispatch{lc $property_key}->();

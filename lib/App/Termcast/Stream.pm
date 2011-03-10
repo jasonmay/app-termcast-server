@@ -2,6 +2,7 @@ package App::Termcast::Stream;
 use Moose;
 use Reflex::Collection;
 use Reflex::Stream;
+use Try::Tiny;
 
 extends 'Reflex::Base';
 
@@ -94,10 +95,25 @@ sub property_data {
             user        => $self->user->id,
             socket      => $self->unix_socket_file,
             last_active => $self->last_active,
-            geometry    => [$self->cols, $self->lines],
     };
 }
 
+sub _send_to_service_handles {
+    my $self = shift;
+    my $data = shift;
+
+    if (not ref $data) {
+        warn "$data is not a reference. Can't be encoded";
+        return;
+    }
+
+    my @service_handles = values %{$self->handle_collection->objects};
+
+    foreach my $stream (@service_handles) {
+        my $json = JSON::encode_json($data);
+        $stream->handle->syswrite($json);
+    }
+}
 sub send_connection_notice {
     my $self      = shift;
 
@@ -106,35 +122,49 @@ sub send_connection_notice {
         connection => $self->property_data,
     );
 
-    foreach my $stream ( values %{$self->handle_collection->objects} ) {
-        my $json = JSON::encode_json(\%response);
-        $stream->handle->syswrite($json);
-    }
+    $self->_send_to_service_handles(\%response);
 }
 
 sub send_disconnection_notice {
     my $self = shift;
 
-    foreach my $handle (values %{$self->handle_collection->objects} ) {
-        my %response = (
-            notice     => 'disconnect',
-            session_id => $self->id,
-        );
+    my %response = (
+        notice     => 'disconnect',
+        session_id => $self->id,
+    );
 
-        my $json = JSON::encode_json(\%response);
-        $handle->syswrite($json);
-    }
+    $self->_send_to_service_handles(\%response);
 }
 
 sub on_handle_data {
     my ($self, $args) = @_;
 
-    $self->add_to_buffer($args->{data});
+    my $cleared = 0;
+    if ($args->{data} =~ s/\e\[H\x00(.*?)\xff\e\[H\e\[2J//) {
+        my $metadata;
+        if (
+            $1 && try { $metadata = JSON::decode_json( $1 ) }
+               && ref($metadata)
+               && ref($metadata) eq 'HASH'
+        ) {
+            my %data = (
+                notice     => 'metadata',
+                session_id => $self->stream_id,
+                metadata   => $metadata,
+            );
 
-    if ($self->{buffer} =~ /(?<!\e\[H)\e\[2J/) {
-        $self->{buffer} =~ s/.+\e\[2J/\e\[H.\e\[2J/s;
+            $self->_send_to_service_handles(\%data);
+        }
+        #(my $edata = $args->{data}) =~ s/\e/\\e/g;
+        #warn $edata;
+        $cleared = 1;
     }
+
+    #substr($self->{buffer}, 0, 0) = "\e[H\e[2J" if $cleared;
+
+
     $_->handle->syswrite($args->{data}) for values %{ $self->unix_sockets->objects };
+    $self->add_to_buffer($args->{data});
 
     $self->mark_active();
 }

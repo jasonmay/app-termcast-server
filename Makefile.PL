@@ -9,6 +9,7 @@ requires 'KiokuX::User';
 requires 'KiokuDB';
 requires 'KiokuDB::Backend::DBI';
 requires 'Moose';
+requires 'Try::Tiny';
 requires 'Data::UUID::LibUUID';
 requires 'Reflex';
 requires 'namespace::autoclean';
