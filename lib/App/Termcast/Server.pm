@@ -149,38 +149,19 @@ sub on_termcast_listener_accept {
         Listen => 1,
     );
 
-    # handle metadata here
-    my $results = $self->handle_metadata($args->{socket});
-
     my %stream_params = (
         handle            => $args->{socket},
         listener          => $listener,
         handle_collection => $self->handles,
         stream_id         => new_uuid_string(),
         unix_socket_file  => $file,
+        kiokudb           => $self->kiokudb,
     );
-
-    $stream_params{user} = $results->{hello} or do {
-        $args->{socket}->syswrite("Authentication failed.\n");
-        warn "auth failed";
-
-        # use noop stream to prevent inf loop of reconnects
-        $self->remember_stream(
-            Reflex::Stream->new( handle => $args->{socket} )
-        );
-
-        return;
-    };
-
-    if ($results->{geom}) {
-        @stream_params{'cols', 'lines'} = @{$results->{geom}};
-    }
 
     my $stream = App::Termcast::Stream->new(%stream_params);
 
     $self->remember_stream($stream);
 
-    $stream->send_connection_notice;
 }
 
 #sub shorten_buffer {
@@ -191,81 +172,6 @@ sub on_termcast_listener_accept {
 #    $handle->session->fix_buffer_length();
 #    $handle->session->{buffer} =~ s/.+\e\[2J//s;
 #}
-
-sub create_user {
-    my $self = shift;
-    my $user = shift;
-    my $pass = shift;
-
-    my $user_object;
-
-    $user_object = App::Termcast::User->new(
-        id       => $user,
-        password => crypt_password($pass),
-    );
-
-    {
-        my $s = $self->kiokudb->new_scope;
-        $self->kiokudb->store($user => $user_object);
-    }
-
-    return $user_object;
-}
-
-sub handle_metadata {
-    my $self   = shift;
-    my $handle = shift;
-
-    # only one metadata line in the beginning
-    chomp(my $buf = <$handle>);
-    my ($key, $value) = split ' ', $buf, 2;
-
-    return { $key => $self->dispatch_metadata($key, $value) };
-}
-
-sub dispatch_metadata {
-    my $self = shift;
-    my ($property_key, $property_value) = @_;
-
-    my %dispatch = (
-        hello => sub {
-            return $self->handle_auth($property_value);
-        },
-    );
-
-    return $dispatch{lc $property_key}->();
-}
-
-sub handle_geometry {
-    my $self = shift;
-    my $line = shift;
-
-    my ($cols, $lines) = split ' ', $line;
-
-    return [$cols, $lines];
-}
-
-sub handle_auth {
-    my $self   = shift;
-    my $line   = shift;
-
-    my ($user, $pass) = $line =~ /(\S+) \s+ (\S+)/x;
-
-    my $user_object;
-    {
-        my $scope = $self->kiokudb->new_scope;
-        $user_object = $self->kiokudb->lookup($user)
-                    || $self->create_user($user, $pass);
-    }
-
-    # XXX probably no crypt_password here
-    if ($user_object->check_password($pass)) {
-        return $user_object;
-    }
-    else {
-        return undef;
-    }
-}
 
 __PACKAGE__->meta->make_immutable;
 

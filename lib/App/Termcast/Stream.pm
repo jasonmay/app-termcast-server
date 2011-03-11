@@ -44,10 +44,21 @@ has cols => (
     default => 80,
 );
 
-has user => (
-    is      => 'ro',
-    isa     => 'App::Termcast::User',
+has kiokudb => (
+    is       => 'ro',
+    isa      => 'KiokuDB',
     required => 1,
+);
+
+has user => (
+    is       => 'rw',
+    isa      => 'App::Termcast::User',
+);
+
+has authenticated => (
+    is      => 'rw',
+    isa     => 'Str',
+    default => 'no',
 );
 
 has buffer => (
@@ -139,6 +150,25 @@ sub send_disconnection_notice {
 sub on_handle_data {
     my ($self, $args) = @_;
 
+    if ($self->authenticated eq 'no') {
+        if ($args->{data} =~ s/(.+)?\n//s) {
+            my $user = $self->handle_auth($1) or do {
+                # just disconnecting when failing will cause the
+                # termcast client to attempt econnecting over and
+                # over at a really fast rate.
+                $self->authenticated('failed');
+                return;
+            };
+
+            $self->user($user);
+
+            $self->authenticated('yes');
+            $self->send_connection_notice;
+        }
+    }
+
+    return if $self->authenticated('failed');
+
     my $cleared = 0;
     if ($args->{data} =~ s/\e\[H\x00(.*?)\xff\e\[H\e\[2J//) {
         my $metadata;
@@ -162,11 +192,53 @@ sub on_handle_data {
 
     #substr($self->{buffer}, 0, 0) = "\e[H\e[2J" if $cleared;
 
-
     $_->handle->syswrite($args->{data}) for values %{ $self->unix_sockets->objects };
     $self->add_to_buffer($args->{data});
 
     $self->mark_active();
+}
+
+sub handle_auth {
+    my $self   = shift;
+    my $line   = shift;
+
+      #'hello'
+    my (undef, $user, $pass) = split(' ', $line, 3);
+
+    my $user_object;
+    {
+        my $scope = $self->kiokudb->new_scope;
+        $user_object = $self->kiokudb->lookup($user)
+                    || $self->create_user($user, $pass);
+    }
+
+    # XXX probably no crypt_password here
+    if ($user_object->check_password($pass)) {
+        return $user_object;
+    }
+    else {
+        return undef;
+    }
+}
+
+sub create_user {
+    my $self = shift;
+    my $user = shift;
+    my $pass = shift;
+
+    my $user_object;
+
+    $user_object = App::Termcast::User->new(
+        id       => $user,
+        password => crypt_password($pass),
+    );
+
+    {
+        my $s = $self->kiokudb->new_scope;
+        $self->kiokudb->store($user => $user_object);
+    }
+
+    return $user_object;
 }
 
 sub on_handle_error {
