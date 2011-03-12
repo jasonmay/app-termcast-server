@@ -206,8 +206,9 @@ sub handle_auth {
     my $self   = shift;
     my $line   = shift;
 
-      #'hello'
-    my (undef, $user, $pass) = split(' ', $line, 3);
+    my ($type, $user, $pass) = split(' ', $line, 3);
+
+    return unless $type eq 'hello';
 
     my $user_object;
     {
