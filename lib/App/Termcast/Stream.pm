@@ -159,23 +159,23 @@ sub on_handle_data {
     my ($self, $args) = @_;
 
     if ($self->authenticated eq 'no') {
-        if ($args->{data} =~ s/(.+)?\n//s) {
-            my $user = $self->handle_auth($1) or do {
-                # just disconnecting when failing will cause the
-                # termcast client to attempt econnecting over and
-                # over at a really fast rate.
-                $self->authenticated('failed');
-                return;
-            };
+        (my $auth_line, $args->{data}) = split /\n/, $args->{data}, 2;
+        my $user = $self->handle_auth($auth_line) or do {
+            # just disconnecting when failing will cause the
+            # termcast client to attempt econnecting over and
+            # over at a really fast rate.
+            $self->authenticated('failed');
+            return;
+        };
 
-            $self->user($user);
+        $self->user($user);
+        #warn $self->user->id;
 
-            $self->authenticated('yes');
-            $self->send_connection_notice;
-        }
+        $self->authenticated('yes');
+        $self->send_connection_notice;
     }
 
-    return if $self->authenticated('failed');
+    return if $self->authenticated eq 'failed';
 
     my $cleared = 0;
     if ($args->{data} =~ s/\e\[H\x00(.*?)\xff\e\[H\e\[2J//) {
@@ -193,12 +193,8 @@ sub on_handle_data {
 
             $self->_send_to_service_handles(\%data);
         }
-        #(my $edata = $args->{data}) =~ s/\e/\\e/g;
-        #warn $edata;
         $cleared = 1;
     }
-
-    #substr($self->{buffer}, 0, 0) = "\e[H\e[2J" if $cleared;
 
     $_->handle->syswrite($args->{data}) for values %{ $self->unix_sockets->objects };
     $self->add_to_buffer($args->{data});
