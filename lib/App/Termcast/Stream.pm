@@ -101,6 +101,7 @@ sub on_listener_accept {
 
 sub property_data {
     my $self = shift;
+
     return {
             session_id  => $self->stream_id,
             user        => $self->user->id,
@@ -212,7 +213,6 @@ sub handle_auth {
                     || $self->create_user($user, $pass);
     }
 
-    # XXX probably no crypt_password here
     if ($user_object->check_password($pass)) {
         return $user_object;
     }
