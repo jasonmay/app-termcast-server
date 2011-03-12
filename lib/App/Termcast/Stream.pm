@@ -86,6 +86,13 @@ has handle_collection => (
     required => 1,
 );
 
+has last_active => (
+    is      => 'rw',
+    isa     => 'Int',
+    default => sub { time() },
+);
+
+
 sub on_listener_accept {
     my ($self, $args) = @_;
 
@@ -256,12 +263,6 @@ sub fix_buffer_length {
         substr($self->{buffer}, 0, $len-51_200) = '';
     }
 }
-
-has last_active => (
-    is      => 'rw',
-    isa     => 'Int',
-    default => sub { time() },
-);
 
 sub mark_active { shift->last_active( time() ); }
 
