@@ -113,6 +113,7 @@ sub property_data {
             session_id  => $self->stream_id,
             user        => $self->user->id,
             socket      => $self->unix_socket_file,
+            geometry    => [$self->cols, $self->lines],
             last_active => $self->last_active,
     };
 }
@@ -185,6 +186,8 @@ sub on_handle_data {
                && ref($metadata)
                && ref($metadata) eq 'HASH'
         ) {
+            $self->handle_metadata($metadata);
+
             my %data = (
                 notice     => 'metadata',
                 session_id => $self->stream_id,
@@ -200,6 +203,27 @@ sub on_handle_data {
     $self->add_to_buffer($args->{data});
 
     $self->mark_active();
+}
+
+sub handle_metadata {
+    my $self     = shift;
+    my $metadata = shift;
+
+    return unless ref($metadata) eq 'HASH';
+
+    if ($metadata->{geometry}) {
+        $self->handle_geometry($metadata);
+    }
+}
+
+sub handle_geometry {
+    my $self     = shift;
+    my $metadata = shift;
+
+    my ($cols, $lines) = @{ $metadata->{geometry} };
+
+    $self->cols($cols);
+    $self->lines($lines);
 }
 
 sub handle_auth {
