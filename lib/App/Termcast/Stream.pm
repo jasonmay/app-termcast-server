@@ -202,6 +202,8 @@ sub on_handle_data {
     $_->handle->syswrite($args->{data}) for values %{ $self->unix_sockets->objects };
     $self->add_to_buffer($args->{data});
 
+    $self->shorten_buffer();
+
     $self->mark_active();
 }
 
@@ -275,6 +277,13 @@ sub on_handle_error {
 
     $self->send_disconnection_notice(fileno $args->{socket});
     $_->close() for values %{ $self->unix_sockets->objects };
+}
+
+sub shorten_buffer {
+    my $self = shift;
+
+    $self->fix_buffer_length();
+    $self->{buffer} =~ s/.+\e\[2J//s;
 }
 
 sub fix_buffer_length {

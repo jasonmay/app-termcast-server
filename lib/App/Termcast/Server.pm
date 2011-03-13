@@ -164,15 +164,6 @@ sub on_termcast_listener_accept {
 
 }
 
-#sub shorten_buffer {
-#    my $self = shift;
-#    my $handle = shift;
-#
-#    return unless $handle->session;
-#    $handle->session->fix_buffer_length();
-#    $handle->session->{buffer} =~ s/.+\e\[2J//s;
-#}
-
 __PACKAGE__->meta->make_immutable;
 
 1;
