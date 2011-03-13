@@ -18,6 +18,8 @@ use File::Temp qw(tempfile);
 
 use IO qw(Socket::INET Socket::UNIX);
 
+use YAML;
+
 use namespace::autoclean;
 
 extends 'Reflex::Base';
@@ -71,9 +73,9 @@ has service_listener => (
 sub _build_service_listener {
     my $self = shift;
 
-    unlink $self->server_socket;
+    unlink $self->config->{socket};
     my $listener = IO::Socket::UNIX->new(
-        Local => $self->server_socket,
+        Local => $self->config->{socket},
         Listen    => 1,
     ) or die $!;
 
@@ -84,12 +86,6 @@ has termcast_port => (
     is  => 'ro',
     isa => 'Int',
     default => 31337,
-);
-
-has server_socket => (
-    is      => 'ro',
-    isa     => 'Str',
-    default => 'connections.sock',
 );
 
 has dsn => (
@@ -111,6 +107,12 @@ sub _build_kiokudb {
     die "DSN must be provided" unless $self->dsn;
     KiokuDB->connect($self->dsn, create => 1);
 }
+
+has config => (
+    is  => 'ro',
+    isa => 'HashRef',
+    default => sub { YAML::LoadFile('etc/config.yml') },
+);
 
 has_many streams => (
     handles => {

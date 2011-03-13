@@ -14,5 +14,7 @@ requires 'Data::UUID::LibUUID';
 requires 'Reflex';
 requires 'namespace::autoclean';
 
+requires 'YAML';
+
 auto_install();
 WriteAll();
