@@ -55,12 +55,6 @@ has user => (
     isa      => 'App::Termcast::User',
 );
 
-has authenticated => (
-    is      => 'rw',
-    isa     => 'Str',
-    default => 'no',
-);
-
 has buffer => (
     is  => 'rw',
     isa => 'Str',
@@ -159,24 +153,18 @@ sub send_disconnection_notice {
 sub on_handle_data {
     my ($self, $args) = @_;
 
-    if ($self->authenticated eq 'no') {
+    if (!$self->user) {
         (my $auth_line, $args->{data}) = split /\n/, $args->{data}, 2;
         my $user = $self->handle_auth($auth_line) or do {
-            # just disconnecting when failing will cause the
-            # termcast client to attempt econnecting over and
-            # over at a really fast rate.
-            $self->authenticated('failed');
+            $self->stopped();
             return;
         };
 
+        $self->handle->syswrite("hello, ".$user->id."\n");
         $self->user($user);
-        #warn $self->user->id;
 
-        $self->authenticated('yes');
         $self->send_connection_notice;
     }
-
-    return if $self->authenticated eq 'failed';
 
     my $cleared = 0;
     if ($args->{data} =~ s/\e\[H\x00(.*?)\xff\e\[H\e\[2J//) {
