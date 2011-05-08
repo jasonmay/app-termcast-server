@@ -1,3 +1,5 @@
 termcast.sqlite
 inc
 etc/config.yml
+META.yml
+Makefile
