@@ -4,6 +4,8 @@ use Reflex::Collection;
 use Reflex::Stream;
 use Try::Tiny;
 
+use KiokuX::User::Util qw(crypt_password);
+
 extends 'Reflex::Base';
 
 with 'Reflex::Role::Accepting', 'Reflex::Role::Streaming';
