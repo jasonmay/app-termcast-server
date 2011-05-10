@@ -57,7 +57,7 @@ sub _build_termcast_listener {
         LocalPort => $self->termcast_port,
         Listen    => 1,
         Reuse     => 1,
-    );
+    ) or die $!;
 
     return $listener;
 }
