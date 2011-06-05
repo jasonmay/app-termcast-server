@@ -1,4 +1,4 @@
-package App::Termcast::Service::Stream;
+package App::Termcast::Manager::Stream;
 use Moose;
 
 extends 'Reflex::Stream';

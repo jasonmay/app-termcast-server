@@ -69,7 +69,7 @@ sub property_data {
     };
 }
 
-sub _send_to_service_handles {
+sub _send_to_manager_handles {
     my $self = shift;
     my $data = shift;
 
@@ -78,9 +78,9 @@ sub _send_to_service_handles {
         return;
     }
 
-    my @service_handles = values %{$self->handle_collection->objects};
+    my @manager_handles = values %{$self->handle_collection->objects};
 
-    foreach my $stream (@service_handles) {
+    foreach my $stream (@manager_handles) {
         my $json = JSON::encode_json($data);
         $stream->handle->syswrite($json);
     }
@@ -93,7 +93,7 @@ sub send_connection_notice {
         connection => $self->property_data,
     );
 
-    $self->_send_to_service_handles(\%response);
+    $self->_send_to_manager_handles(\%response);
 }
 
 sub send_disconnection_notice {
@@ -104,7 +104,7 @@ sub send_disconnection_notice {
         session_id => $self->stream_id,
     );
 
-    $self->_send_to_service_handles(\%response);
+    $self->_send_to_manager_handles(\%response);
 }
 
 sub on_data {
@@ -139,7 +139,7 @@ sub on_data {
                 metadata   => $metadata,
             );
 
-            $self->_send_to_service_handles(\%data);
+            $self->_send_to_manager_handles(\%data);
         }
         $cleared = 1;
     }

@@ -12,7 +12,7 @@ use Data::UUID::LibUUID;
 
 use App::Termcast::User;
 use App::Termcast::Stream;
-use App::Termcast::Service::Stream;
+use App::Termcast::Manager::Stream;
 use App::Termcast::Server::UNIX;
 
 use File::Temp qw(tempfile);
@@ -26,7 +26,7 @@ use namespace::autoclean;
 extends 'Reflex::Base';
 
 with 'Reflex::Role::Accepting' => { listener => 'termcast_listener' },
-     'Reflex::Role::Accepting' => { listener => 'service_listener'  };
+     'Reflex::Role::Accepting' => { listener => 'manager_listener'  };
 
 $|++;
 
@@ -63,15 +63,15 @@ sub _build_termcast_listener {
     return $listener;
 }
 
-has service_listener => (
+has manager_listener => (
     is  => 'ro',
     isa => 'FileHandle',
     lazy => 1,
-    builder => '_build_service_listener',
+    builder => '_build_manager_listener',
 );
 
 
-sub _build_service_listener {
+sub _build_manager_listener {
     my $self = shift;
 
     unlink $self->config->{socket};
@@ -131,11 +131,11 @@ has_many handles => (
 
 # TODO: session timer?
 
-sub on_service_listener_accept {
+sub on_manager_listener_accept {
     my ($self, $args) = @_;
 
     $self->remember_handle(
-        App::Termcast::Service::Stream->new(
+        App::Termcast::Manager::Stream->new(
             handle => $args->{socket},
             stream_collection => $self->streams,
         )
