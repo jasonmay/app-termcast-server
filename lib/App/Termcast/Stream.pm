@@ -6,27 +6,7 @@ use Try::Tiny;
 
 use KiokuX::User::Util qw(crypt_password);
 
-extends 'Reflex::Base';
-
-with 'Reflex::Role::Accepting', 'Reflex::Role::Streaming';
-
-has handle => (
-    is        => 'rw',
-    isa       => 'FileHandle',
-    required  => 1,
-);
-
-has listener => (
-    is        => 'rw',
-    isa       => 'FileHandle',
-    required  => 1,
-);
-
-has_many unix_sockets => (
-    handles => {
-        remember_unix_socket => 'remember',
-    },
-);
+extends 'Reflex::Stream';
 
 has stream_id => (
     is => 'ro',
@@ -57,24 +37,6 @@ has user => (
     isa      => 'App::Termcast::User',
 );
 
-has buffer => (
-    is  => 'rw',
-    isa => 'Str',
-
-    traits  => ['String'],
-    default => '',
-    handles => {
-        add_to_buffer => 'append',
-        buffer_length => 'length',
-        clear_buffer  => 'clear',
-    },
-);
-
-has unix_socket_file => (
-    is     => 'rw',
-    isa    => 'Str',
-);
-
 # pass this down for reference
 has handle_collection => (
     is     => 'ro',
@@ -88,19 +50,12 @@ has last_active => (
     default => sub { time() },
 );
 
+has unix => (
+    is       => 'ro',
+    isa      => 'App::Termcast::Server::UNIX',
+    required => 1,
+);
 
-sub on_listener_accept {
-    my ($self, $args) = @_;
-
-    $self->remember_unix_socket(
-        Reflex::Stream->new(
-            handle => $args->{socket},
-            rd     => 1,
-        ),
-    );
-
-    $args->{socket}->syswrite($self->buffer);
-}
 
 sub property_data {
     my $self = shift;
@@ -108,7 +63,7 @@ sub property_data {
     return {
             session_id  => $self->stream_id,
             user        => $self->user->id,
-            socket      => $self->unix_socket_file,
+            socket      => $self->unix->file,
             geometry    => [$self->cols, $self->lines],
             last_active => $self->last_active,
     };
@@ -146,13 +101,13 @@ sub send_disconnection_notice {
 
     my %response = (
         notice     => 'disconnect',
-        session_id => $self->id,
+        session_id => $self->stream_id,
     );
 
     $self->_send_to_service_handles(\%response);
 }
 
-sub on_handle_data {
+sub on_data {
     my ($self, $args) = @_;
 
     if (!$self->user) {
@@ -189,8 +144,8 @@ sub on_handle_data {
         $cleared = 1;
     }
 
-    $_->handle->syswrite($args->{data}) for values %{ $self->unix_sockets->objects };
-    $self->add_to_buffer($args->{data});
+    $_->handle->syswrite($args->{data}) for values %{ $self->unix->sockets->objects };
+    $self->unix->add_to_buffer($args->{data});
 
     $self->shorten_buffer();
 
@@ -261,26 +216,34 @@ sub create_user {
     return $user_object;
 }
 
-sub on_handle_error {
+sub _disconnect {
+    my ($self) = @_;
+    $self->send_disconnection_notice();
+    $_->stopped() for values %{ $self->unix->sockets->objects };
+}
+sub on_closed {
     my ($self, $args) = @_;
-    warn "error";
+    $self->_disconnect();
+    $self->stopped();
+}
 
-    $self->send_disconnection_notice(fileno $args->{socket});
-    $_->close() for values %{ $self->unix_sockets->objects };
+sub on_error {
+    my ($self, $args) = @_;
+    $self->_disconnect();
 }
 
 sub shorten_buffer {
     my $self = shift;
 
     $self->fix_buffer_length();
-    $self->{buffer} =~ s/.+\e\[2J//s;
+    $self->unix->{buffer} =~ s/.+\e\[2J//s;
 }
 
 sub fix_buffer_length {
     my $self = shift;
-    my $len = $self->buffer_length;
+    my $len = $self->unix->buffer_length;
     if ($len > 51_200) {
-        substr($self->{buffer}, 0, $len-51_200) = '';
+        substr($self->unix->{buffer}, 0, $len-51_200) = '';
     }
 }
 

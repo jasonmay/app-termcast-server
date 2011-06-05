@@ -13,6 +13,7 @@ use Data::UUID::LibUUID;
 use App::Termcast::User;
 use App::Termcast::Stream;
 use App::Termcast::Service::Stream;
+use App::Termcast::Server::UNIX;
 
 use File::Temp qw(tempfile);
 
@@ -151,13 +152,17 @@ sub on_termcast_listener_accept {
         Listen => 1,
     );
 
+    my $unix = App::Termcast::Server::UNIX->new(
+        listener => $listener,
+        file     => $file,
+    );
+
     my %stream_params = (
         handle            => $args->{socket},
-        listener          => $listener,
         handle_collection => $self->handles,
         stream_id         => new_uuid_string(),
-        unix_socket_file  => $file,
         kiokudb           => $self->kiokudb,
+        unix              => $unix,
     );
 
     my $stream = App::Termcast::Stream->new(%stream_params);
