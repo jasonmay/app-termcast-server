@@ -1,0 +1,7 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use App::Termcast::Server::Runner;
+
+App::Termcast::Server::Runner->new_with_options(@ARGV)->run();
+

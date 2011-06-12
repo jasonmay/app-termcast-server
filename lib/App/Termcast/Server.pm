@@ -44,6 +44,12 @@ TODO
 
 =cut
 
+has manager_listener_path => (
+    is       => 'ro',
+    isa      => 'Str',
+    required => 1,
+);
+
 has termcast_listener => (
     is  => 'ro',
     isa => 'FileHandle',
@@ -70,13 +76,13 @@ has manager_listener => (
     builder => '_build_manager_listener',
 );
 
-
 sub _build_manager_listener {
     my $self = shift;
 
-    unlink $self->config->{socket};
+    unlink $self->manager_listener_path;
+    warn $self->manager_listener_path;
     my $listener = IO::Socket::UNIX->new(
-        Local => $self->config->{socket},
+        Local => $self->manager_listener_path,
         Listen    => 1,
     ) or die $!;
 
@@ -119,14 +125,14 @@ has_many streams => (
     handles => {
         remember_stream => 'remember',
         forget_stream   => 'forget',
-    }
+    },
 );
 
 has_many handles => (
     handles => {
         remember_handle => 'remember',
         forget_handle   => 'forget',
-    }
+    },
 );
 
 # TODO: session timer?
@@ -176,9 +182,6 @@ __PACKAGE__->meta->make_immutable;
 1;
 
 __END__
-
-=head1 METHODS
-
 
 =head1 AUTHOR
 
