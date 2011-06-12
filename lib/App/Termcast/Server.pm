@@ -80,7 +80,6 @@ sub _build_manager_listener {
     my $self = shift;
 
     unlink $self->manager_listener_path;
-    warn $self->manager_listener_path;
     my $listener = IO::Socket::UNIX->new(
         Local => $self->manager_listener_path,
         Listen    => 1,

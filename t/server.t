@@ -116,14 +116,9 @@ test_tcp(
     server => sub {
         my $port = shift;
 
-        my $manager = IO::Socket::UNIX->new(
-            Listen => 1,
-            Local  => $unix_file,
-        );
-
         App::Termcast::Server->new(
-            manager_listener => $manager,
-            termcast_port    => $port,
+            manager_listener_path => $unix_file,
+            termcast_port         => $port,
         )->run_all();
     },
 );
