@@ -5,5 +5,18 @@ use App::Termcast::Server::Runner;
 # PODNAME: termcast-server
 # ABSTRACT: host your own Termcast server
 
-App::Termcast::Server::Runner->new_with_options(@ARGV)->run();
+=head1 SYNOPSIS
+
+termcast-server [options]
+
+=head1 DESCRIPTION
+
+Runs an instance of the Termcast server. See L<App::Termcast::Server> for
+details.
+
+Issue C<termcast-server --help> for usage details.
+
+=cut
+
+App::Termcast::Server::Runner->new_with_options->run();
 

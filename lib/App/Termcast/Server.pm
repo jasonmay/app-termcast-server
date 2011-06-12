@@ -32,10 +32,6 @@ with 'Reflex::Role::Accepting' => { listener => 'termcast_listener' },
 
 $|++;
 
-=head1 NAME
-
-App::Termcast::Server - a centralized, all-purpose termcast server
-
 =head1 SYNOPSIS
 
     my $server = App::Termcast::Server->new(
@@ -93,30 +89,25 @@ For more details, see C<t/server.t>.
 
 =cut
 
+=attr manager_listener_path
+
+Filepath where the "manager" UNIX socket will be run.
+
+=cut
+
 has manager_listener_path => (
     is       => 'ro',
     isa      => 'Str',
     required => 1,
 );
 
-has termcast_listener => (
-    is  => 'ro',
-    isa => 'FileHandle',
-    lazy => 1,
-    builder => '_build_termcast_listener',
-);
+=attr manager_listener
 
-sub _build_termcast_listener {
-    my $self = shift;
+"Manager" UNIX socket where communication between the apps and the broadcasters
+occur. By default it is built automatically by using the
+C<manager_listener_path> attribute as its peer address.
 
-    my $listener = IO::Socket::INET->new(
-        LocalPort => $self->termcast_port,
-        Listen    => 1,
-        Reuse     => 1,
-    ) or die $!;
-
-    return $listener;
-}
+=cut
 
 has manager_listener => (
     is  => 'ro',
@@ -137,17 +128,61 @@ sub _build_manager_listener {
     return $listener;
 }
 
+=attr termcast_port
+
+Port to which the broadcasters will point their termcast clients
+
+=cut
+
 has termcast_port => (
     is  => 'ro',
     isa => 'Int',
     default => 31337,
 );
 
+=attr termcast_listener
+
+TCP socket to which broadcasters will connect. By default, it is built
+automatically using the C<termcast_port> attribute as the remote port.
+
+=cut
+
+has termcast_listener => (
+    is  => 'ro',
+    isa => 'FileHandle',
+    lazy => 1,
+    builder => '_build_termcast_listener',
+);
+
+sub _build_termcast_listener {
+    my $self = shift;
+
+    my $listener = IO::Socket::INET->new(
+        LocalPort => $self->termcast_port,
+        Listen    => 1,
+        Reuse     => 1,
+    ) or die $!;
+
+    return $listener;
+}
+
+=attr dsn
+
+A KiokuDB-type DSN for where user auth data is stored
+
+=cut
+
 has dsn => (
     is      => 'ro',
     isa     => 'Str',
     default => 'dbi:SQLite:dbname=termcast.sqlite',
 );
+
+=attr kiokudb
+
+A L<KiokuDB> object used for the storage logic
+
+=cut
 
 has kiokudb => (
     is       => 'ro',
@@ -182,6 +217,10 @@ has_many handles => (
         forget_handle   => 'forget',
     },
 );
+
+=for Pod::Coverage config streams handles
+
+=cut
 
 # TODO: session timer?
 
