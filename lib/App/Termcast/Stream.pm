@@ -80,8 +80,8 @@ sub _send_to_manager_handles {
 
     my @manager_handles = values %{$self->handle_collection->objects};
 
+    my $json = JSON::encode_json($data);
     foreach my $stream (@manager_handles) {
-        my $json = JSON::encode_json($data);
         $stream->handle->syswrite($json);
     }
 }
