@@ -2,6 +2,8 @@
 use strict;
 use warnings;
 use App::Termcast::Server::Runner;
+# PODNAME: termcast-server
+# ABSTRACT: host your own Termcast server
 
 App::Termcast::Server::Runner->new_with_options(@ARGV)->run();
 

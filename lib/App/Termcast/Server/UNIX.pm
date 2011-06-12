@@ -4,6 +4,8 @@ use Reflex::Collection;
 
 extends 'Reflex::Acceptor';
 
+# ABSTRACT: Reflex unix socket listener for components
+
 has_many sockets => (
     handles => {
         remember_unix_socket => 'remember',

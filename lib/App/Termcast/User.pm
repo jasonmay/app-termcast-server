@@ -2,6 +2,7 @@
 package App::Termcast::User;
 use KiokuDB::Class;
 use namespace::autoclean;
+# ABSTRACT: user class for the Termcast kioku schema
 
 with qw(KiokuX::User);
 

@@ -23,6 +23,8 @@ use YAML;
 
 use namespace::autoclean;
 
+# ABSTRACT: core of the Termcast server
+
 extends 'Reflex::Base';
 
 with 'Reflex::Role::Accepting' => { listener => 'termcast_listener' },

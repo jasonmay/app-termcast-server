@@ -3,6 +3,8 @@ use Moose;
 
 use App::Termcast::Server;
 
+# ABSTRACT: getopt layer for the temcast-server command
+
 with 'MooseX::Getopt';
 
 has socket => (

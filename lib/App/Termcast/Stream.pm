@@ -6,6 +6,8 @@ use Try::Tiny;
 
 use KiokuX::User::Util qw(crypt_password);
 
+# ABSTRACT: Reflex stream for handling broadcaster I/O
+
 extends 'Reflex::Stream';
 
 has stream_id => (
