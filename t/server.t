@@ -66,12 +66,6 @@ test_tcp(
 
         my $conn = $cur->{connection};
 
-        # $get_next->(1);
-
-        # $cur = shift @res;
-        # is $cur->{notice}, 'metadata', 'sees notice';
-        # ok $cur->{metadata}, 'sees notice';
-
         $manager->syswrite('{"request":"sessions"}');
         $get_next->(1);
 
@@ -83,6 +77,17 @@ test_tcp(
                 sessions => [$conn],
             }, 'connection shows in sessions response'
         );
+
+
+        my $stream = IO::Socket::UNIX->new(
+            Peer => $cur->{sessions}->[0]->{socket},
+        ) or die $!;
+
+        my $stream_buf;
+        $socket->syswrite('ansi');
+        $stream->read($stream_buf, 4);
+
+        is $stream_buf, 'ansi', 'was successfully able to read the ansi';
 
         $socket->close();
 
