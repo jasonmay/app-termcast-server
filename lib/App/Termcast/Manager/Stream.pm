@@ -11,12 +11,19 @@ has stream_collection => (
     required => 1,
 );
 
+has json => (
+    is      => 'ro',
+    isa     => 'JSON',
+    default => sub { JSON->new },
+    lazy    => 1,
+);
+
 sub on_data {
     my ($self, $args) = @_;
 
-    my $data = JSON::decode_json( $args->{data} );
+    my @data = $self->json->incr_parse($args->{data});
 
-    $self->handle_server($data);
+    $self->handle_server($_) for @data;
 }
 
 sub handle_server {
@@ -33,7 +40,7 @@ sub handle_server {
             ],
         );
 
-        my $json = JSON::encode_json(\%response);
+        my $json = $self->json->encode(\%response);
         $self->handle->syswrite($json);
     }
 }
