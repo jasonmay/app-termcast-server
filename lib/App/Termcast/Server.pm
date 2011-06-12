@@ -38,11 +38,58 @@ App::Termcast::Server - a centralized, all-purpose termcast server
 
 =head1 SYNOPSIS
 
-TODO
+    my $server = App::Termcast::Server->new(
+        manager_listener_path => $self->socket,
+        termcast_port => $self->port,
+    );
+
+    # For a CLI approach, see the documentation for 
+    # the 'termcast-server' command.
 
 =head1 DESCRIPTION
 
-TODO
+Familiar with L<http://termcast.org>? If not, it's a managed termcast server
+where people can use a termcast client to broadcast their terminal sessions,
+viewed by connecting to the server with a telnet client. This mdoule is 
+inspired by that website, taking the idea of a centralized, headless
+Termcast server, decoupled from actual hosted applications for optimal
+flexibility.
+
+=head1 ARCHITECTURE
+
+App::Termcast::Server sets up two listening sockets: a TCP socket (default
+port: 31337), and a UNIX domain socket (required by you to set up).
+
+=over
+
+=item The TCP socket
+
+The TCP socket is what termcast clients will connect to and send its ANSI
+data. 
+
+=item The "manager" UNIX socket
+
+This socket communicates with other applications, (telnet apps, web apps, etc.). 
+It relays information about the broadcasters, i.e. new connections, disconnects,
+terminal metadata updates (currently just terminal geometry). You can also ask
+for a list of sessions. All communication is done over L<JSON>. A sample of
+this communication can be found in C<t/server.t> in this distribution.
+Alternatively, you can also use C<App::Termcast::Connector> instead of
+processing everything manually.
+
+=item Representative UNIX sockets
+
+This module stores a set of UNIX sockets mapped as a 1:1 representation of
+each person broadcasting. Since each session is identified by a UUID, a mapping
+of sessions IDs to its represented UNIX socket path can be stored and used
+by external applications. This can be done with a simple JSON message to the
+manager soceket:
+
+  {"request":"sessions"}
+
+For more details, see C<t/server.t>.
+
+=back
 
 =cut
 
