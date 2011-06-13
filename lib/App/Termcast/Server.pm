@@ -39,14 +39,14 @@ $|++;
         termcast_port => $self->port,
     );
 
-    # For a CLI approach, see the documentation for 
+    # For a CLI approach, see the documentation for
     # the 'termcast-server' command.
 
 =head1 DESCRIPTION
 
 Familiar with L<http://termcast.org>? If not, it's a managed termcast server
 where people can use a termcast client to broadcast their terminal sessions,
-viewed by connecting to the server with a telnet client. This mdoule is 
+viewed by connecting to the server with a telnet client. This module is
 inspired by that website, taking the idea of a centralized, headless
 Termcast server, decoupled from actual hosted applications for optimal
 flexibility.
@@ -61,11 +61,11 @@ port: 31337), and a UNIX domain socket (required by you to set up).
 =item The TCP socket
 
 The TCP socket is what termcast clients will connect to and send its ANSI
-data. 
+data.
 
 =item The "manager" UNIX socket
 
-This socket communicates with other applications, (telnet apps, web apps, etc.). 
+This socket communicates with other applications, (telnet apps, web apps, etc.).
 It relays information about the broadcasters, i.e. new connections, disconnects,
 terminal metadata updates (currently just terminal geometry). You can also ask
 for a list of sessions. All communication is done over L<JSON>. A sample of
