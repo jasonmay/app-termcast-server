@@ -119,6 +119,7 @@ test_tcp(
         App::Termcast::Server->new(
             manager_listener_path => $unix_file,
             termcast_port         => $port,
+            dsn                   => 'dbi:SQLite:dbname=:memory:',
         )->run_all();
     },
 );
