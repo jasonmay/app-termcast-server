@@ -10,9 +10,9 @@ use KiokuX::User::Util qw(crypt_password);
 
 use Data::UUID::LibUUID;
 
-use App::Termcast::User;
-use App::Termcast::Stream;
-use App::Termcast::Manager::Stream;
+use App::Termcast::Server::User;
+use App::Termcast::Server::Stream;
+use App::Termcast::Server::Manager::Stream;
 use App::Termcast::Server::UNIX;
 
 use File::Temp qw(tempfile);
@@ -228,7 +228,7 @@ sub on_manager_listener_accept {
     my ($self, $args) = @_;
 
     $self->remember_handle(
-        App::Termcast::Manager::Stream->new(
+        App::Termcast::Server::Manager::Stream->new(
             handle => $args->{socket},
             stream_collection => $self->streams,
         )
@@ -258,10 +258,9 @@ sub on_termcast_listener_accept {
         unix              => $unix,
     );
 
-    my $stream = App::Termcast::Stream->new(%stream_params);
+    my $stream = App::Termcast::Server::Stream->new(%stream_params);
 
     $self->remember_stream($stream);
-
 }
 
 __PACKAGE__->meta->make_immutable;

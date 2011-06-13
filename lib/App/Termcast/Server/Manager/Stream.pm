@@ -1,4 +1,4 @@
-package App::Termcast::Manager::Stream;
+package App::Termcast::Server::Manager::Stream;
 use Moose;
 # ABSTRACT: Reflex stream for manager socket I/O
 

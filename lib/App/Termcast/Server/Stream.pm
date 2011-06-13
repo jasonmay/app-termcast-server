@@ -1,10 +1,12 @@
-package App::Termcast::Stream;
+package App::Termcast::Server::Stream;
 use Moose;
 use Reflex::Collection;
 use Reflex::Stream;
 use Try::Tiny;
 
 use KiokuX::User::Util qw(crypt_password);
+
+use App::Termcast::Server::User;
 
 # ABSTRACT: Reflex stream for handling broadcaster I/O
 
@@ -36,7 +38,7 @@ has kiokudb => (
 
 has user => (
     is       => 'rw',
-    isa      => 'App::Termcast::User',
+    isa      => 'App::Termcast::Server::User',
 );
 
 # pass this down for reference
@@ -205,7 +207,7 @@ sub create_user {
 
     my $user_object;
 
-    $user_object = App::Termcast::User->new(
+    $user_object = App::Termcast::Server::User->new(
         id       => $user,
         password => crypt_password($pass),
     );
