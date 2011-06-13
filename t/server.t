@@ -32,9 +32,6 @@ test_tcp(
             }
         };
 
-        # disconnect false-alarm, due to test_tcp
-        $get_next->(1); shift @res;
-
         $manager->syswrite('{"request":"sessions"}');
         $get_next->(1);
 
