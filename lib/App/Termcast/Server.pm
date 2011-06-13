@@ -224,6 +224,10 @@ has_many handles => (
 
 # TODO: session timer?
 
+=for Pod::Coverage on_manager_listener_accept on_termcast_listener_accept
+
+=cut
+
 sub on_manager_listener_accept {
     my ($self, $args) = @_;
 

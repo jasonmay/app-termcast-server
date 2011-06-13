@@ -21,6 +21,10 @@ has port => (
     documentation => 'TCP port that streamers will use termcast to connect to',
 );
 
+=for Pod::Coverage run
+
+=cut
+
 sub run {
     my $self = shift;
 

@@ -60,6 +60,41 @@ has unix => (
     required => 1,
 );
 
+=begin Pod::Coverage
+
+property_data
+
+_send_to_manager_handles
+
+send_connection_notice
+
+send_disconnection_notice
+
+on_data
+
+handle_metadata
+
+handle_geometry
+
+handle_auth
+
+create_user
+
+_disconnect
+
+on_closed
+
+on_error
+
+shorten_buffer
+
+fix_buffer_length
+
+mark_active
+
+=end Pod::Coverage
+
+=cut
 
 sub property_data {
     my $self = shift;

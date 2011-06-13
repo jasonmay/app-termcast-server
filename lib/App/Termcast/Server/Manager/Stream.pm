@@ -19,6 +19,10 @@ has json => (
     lazy    => 1,
 );
 
+=for Pod::Coverage on_data handle_server
+
+=cut
+
 sub on_data {
     my ($self, $args) = @_;
 
