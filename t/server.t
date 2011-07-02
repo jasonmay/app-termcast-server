@@ -98,9 +98,10 @@ test_tcp(
         );
 
         $manager->syswrite('{"request":"sessions"}');
-        $get_next->(2);
+        $get_next->(1);
         if ($res[0]->{notice}) {
             shift @res; # XXX FIXME - why is it seeing the notice twice?
+            $get_next->(1);
         }
 
         is_deeply(
