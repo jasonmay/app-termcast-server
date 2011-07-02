@@ -7,7 +7,7 @@ use App::Termcast::Server::Runner;
 
 =head1 SYNOPSIS
 
-termcast-server [options]
+ termcast-server [options]
 
 =head1 DESCRIPTION
 
