@@ -27,9 +27,6 @@ use namespace::autoclean;
 
 extends 'Reflex::Base';
 
-with 'Reflex::Role::Accepting' => { listener => 'termcast_listener' },
-     'Reflex::Role::Accepting' => { listener => 'manager_listener'  };
-
 $|++;
 
 =head1 SYNOPSIS
@@ -204,6 +201,12 @@ has config => (
     default => sub { YAML::LoadFile('etc/config.yml') },
 );
 
+has ['termcast_is_active', 'manager_is_active'] => (
+    is      => 'ro',
+    isa     => 'Bool',
+    default => 1
+);
+
 has_many streams => (
     handles => {
         remember_stream => 'remember',
@@ -266,6 +269,24 @@ sub on_termcast_listener_accept {
 
     $self->remember_stream($stream);
 }
+
+sub on_termcast_listener_error {
+    die "@_";
+}
+
+sub on_manager_listener_error {
+    die "@_";
+}
+
+with
+    'Reflex::Role::Accepting' => {
+        att_listener => 'termcast_listener',
+        att_active   => 'termcast_is_active',
+    },
+    'Reflex::Role::Accepting' => {
+        att_listener => 'manager_listener',
+        att_active   => 'manager_is_active',
+    };
 
 __PACKAGE__->meta->make_immutable;
 

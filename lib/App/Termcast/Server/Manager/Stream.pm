@@ -41,7 +41,7 @@ sub handle_server {
             sessions => [
                 map {
                 $_->property_data
-                } values %{$self->stream_collection->objects}
+                } $self->stream_collection->get_objects
             ],
         );
 

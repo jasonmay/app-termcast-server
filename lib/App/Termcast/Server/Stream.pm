@@ -117,7 +117,7 @@ sub _send_to_manager_handles {
         return;
     }
 
-    my @manager_handles = values %{$self->handle_collection->objects};
+    my @manager_handles = $self->handle_collection->get_objects;
 
     my $json = JSON::encode_json($data);
     foreach my $stream (@manager_handles) {
@@ -183,7 +183,7 @@ sub on_data {
         $cleared = 1;
     }
 
-    $_->handle->syswrite($args->{data}) for values %{ $self->unix->sockets->objects };
+    $_->handle->syswrite($args->{data}) for $self->unix->sockets->get_objects;
     $self->unix->add_to_buffer($args->{data});
 
     $self->shorten_buffer();
@@ -258,7 +258,7 @@ sub create_user {
 sub _disconnect {
     my ($self) = @_;
     $self->send_disconnection_notice();
-    $_->stopped() for values %{ $self->unix->sockets->objects };
+    $_->stopped() for $self->unix->sockets->get_objects;
 }
 sub on_closed {
     my ($self, $args) = @_;
