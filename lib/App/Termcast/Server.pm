@@ -240,7 +240,6 @@ has session_timer => (
             on_tick     => sub {
                 foreach my $session ($self->streams->get_objects) {
                     my $seconds_idle = time() - $session->last_active;
-                    warn $seconds_idle;
                     if ($seconds_idle > 3600 * 4) {
                         $session->_disconnect();
                         $session->stopped();
