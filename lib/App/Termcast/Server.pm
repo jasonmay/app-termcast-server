@@ -2,6 +2,8 @@
 package App::Termcast::Server;
 
 use Reflex::Collection;
+use Reflex::Interval;
+use Reflex::Trait::Watched;
 
 use Moose;
 
@@ -225,7 +227,29 @@ has_many handles => (
 
 =cut
 
-# TODO: session timer?
+has session_timer => (
+    is     => 'ro',
+    isa    => 'Reflex::Interval',
+    traits => ['Reflex::Trait::Watched'],
+    default => sub {
+        my $self = shift;
+        # TODO stick interval/idle metrics into config
+        Reflex::Interval->new(
+            interval    => 300,
+            auto_repeat => 1,
+            on_tick     => sub {
+                foreach my $session ($self->streams->get_objects) {
+                    my $seconds_idle = time() - $session->last_active;
+                    warn $seconds_idle;
+                    if ($seconds_idle > 3600 * 4) {
+                        $session->_disconnect();
+                        $session->stopped();
+                    }
+                }
+            },
+        );
+    }
+);
 
 =for Pod::Coverage on_manager_listener_accept on_termcast_listener_accept
 
