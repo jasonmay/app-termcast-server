@@ -250,6 +250,12 @@ has session_timer => (
     }
 );
 
+has interval => (
+    is      => 'ro',
+    isa     => 'Num',
+    default => 0,
+);
+
 =for Pod::Coverage on_manager_listener_accept on_termcast_listener_accept
 
 =cut
@@ -286,6 +292,7 @@ sub on_termcast_listener_accept {
         stream_id         => new_uuid_string(),
         kiokudb           => $self->kiokudb,
         unix              => $unix,
+        interval          => $self->interval,
     );
 
     my $stream = App::Termcast::Server::Stream->new(%stream_params);

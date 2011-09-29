@@ -4,6 +4,7 @@ use Reflex::Collection;
 use Reflex::Stream;
 use Try::Tiny;
 
+use Scalar::Util 'weaken';
 use KiokuX::User::Util qw(crypt_password);
 
 use App::Termcast::Server::User;
@@ -60,6 +61,26 @@ has unix => (
     required => 1,
 );
 
+has interval => (
+    is      => 'ro',
+    isa     => 'Num',
+    lazy    => 1,
+    default => 0,
+);
+
+has _broadcast_ticker => (
+    is        => 'rw',
+    isa       => 'Maybe[Reflex::Interval]',
+    predicate => 'on_interval',
+);
+
+has _broadcast_buffer => (
+    is      => 'bare',
+    isa     => 'Str',
+    lazy    => 1,
+    default => '',
+);
+
 =begin Pod::Coverage
 
 property_data
@@ -96,6 +117,33 @@ mark_active
 
 =cut
 
+sub BUILD {
+    my $self = shift;
+    if ($self->interval) {
+        my $wself = $self;
+        weaken $wself;
+        my $ticker = Reflex::Interval->new(
+            auto_repeat => 1,
+            interval    => $self->interval,
+            on_tick   => sub {
+                my $buf = $wself->{_broadcast_buffer};
+                $wself->{_broadcast_buffer} = '';
+                $wself->broadcast($buf);
+            },
+        );
+
+        $self->_broadcast_ticker($ticker);
+    }
+}
+
+sub broadcast {
+    my $self = shift;
+    my $string = shift;
+
+    $_->handle->syswrite($string)
+        for $self->unix->sockets->get_objects;
+}
+
 sub property_data {
     my $self = shift;
 
@@ -124,6 +172,7 @@ sub _send_to_manager_handles {
         $stream->handle->syswrite($json);
     }
 }
+
 sub send_connection_notice {
     my $self      = shift;
 
@@ -183,7 +232,13 @@ sub on_data {
         $cleared = 1;
     }
 
-    $_->handle->syswrite($args->{data}) for $self->unix->sockets->get_objects;
+    if ($self->on_interval) {
+        $self->{_broadcast_buffer} .= $args->{data};
+    }
+    else {
+        $self->broadcast($args->{data});
+    }
+
     $self->unix->add_to_buffer($args->{data});
 
     $self->shorten_buffer();

@@ -21,6 +21,12 @@ has port => (
     documentation => 'TCP port that streamers will use termcast to connect to',
 );
 
+has interval => (
+    is      => 'ro',
+    isa     => 'Num',
+    default => 0,
+);
+
 =for Pod::Coverage run
 
 =cut
@@ -30,7 +36,8 @@ sub run {
 
     my $server = App::Termcast::Server->new(
         manager_listener_path => $self->socket,
-        termcast_port => $self->port,
+        termcast_port         => $self->port,
+        interval              => $self->interval,
     );
 
     $server->run_all();
