@@ -10,7 +10,7 @@ with 'MooseX::Getopt';
 has socket => (
     is            => 'ro',
     isa           => 'Str',
-    required      => 1,
+    default       => 'connections.sock',
     documentation => 'UNIX domain socket path for components to connect to',
 );
 
