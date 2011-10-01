@@ -1,5 +1,7 @@
 cover_db
 META.yml
+MYMETA.yml
+MYMETA.json
 Makefile
 blib
 inc
@@ -11,6 +13,10 @@ MANIFEST.bak
 *.sw[po]
 .build
 App-Termcast-Server-*
+
+/Server.bs
+/Server.c
+/Server.o
 
 termcast.sqlite
 etc/config.yml

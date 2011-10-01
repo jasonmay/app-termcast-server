@@ -8,6 +8,7 @@ use Scalar::Util 'weaken';
 use KiokuX::User::Util qw(crypt_password);
 
 use App::Termcast::Server::User;
+use App::Termcast::Server::Util;
 
 # ABSTRACT: Reflex stream for handling broadcaster I/O
 
@@ -225,10 +226,11 @@ sub _process_input {
     }
 
     my $cleared = 0;
-    if ($args->{data} =~ s/\e\[H\x00(.*?)\xff\e\[H\e\[2J//) {
+    my $metadata_str = App::Termcast::Server::Util::extract_metadata($input);
+    if (length $metadata_str) {
         my $metadata;
         if (
-            $1 && try { $metadata = JSON::decode_json( $1 ) }
+            $1 && try { $metadata = JSON::decode_json( $metadata_str ) }
                && ref($metadata)
                && ref($metadata) eq 'HASH'
         ) {
@@ -335,17 +337,16 @@ sub on_error {
 sub shorten_buffer {
     my $self = shift;
 
-    $self->fix_buffer_length();
-    $self->unix->{buffer} =~ s/.+\e\[2J//s;
+    App::Termcast::Server::Util::shorten($self->unix->{buffer});
+    #if $self->unix->{buffer};
+    #$self->fix_buffer_length();
+    #$self->unix->{buffer} =~ s/.+\e\[2J//s;
 }
 
-sub fix_buffer_length {
-    my $self = shift;
-    my $len = $self->unix->buffer_length;
-    if ($len > 51_200) {
-        substr($self->unix->{buffer}, 0, $len-51_200) = '';
-    }
-}
+#sub fix_buffer_length {
+#    my $self = shift;
+#    App::Termcast::Server::Util::shorten($self->unix->{buffer});
+#}
 
 sub mark_active { shift->last_active( time() ); }
 

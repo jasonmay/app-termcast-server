@@ -318,6 +318,7 @@ with
         att_active   => 'manager_is_active',
     };
 
+require XSLoader; XSLoader::load(__PACKAGE__);
 __PACKAGE__->meta->make_immutable;
 
 1;
