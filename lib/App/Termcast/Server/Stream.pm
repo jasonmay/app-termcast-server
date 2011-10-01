@@ -128,7 +128,7 @@ sub BUILD {
             on_tick   => sub {
                 my $buf = $wself->{_broadcast_buffer};
                 $wself->{_broadcast_buffer} = '';
-                $wself->broadcast($buf);
+                $self->_process_input($buf);
             },
         );
 
@@ -198,8 +198,21 @@ sub send_disconnection_notice {
 sub on_data {
     my ($self, $args) = @_;
 
+    if ($self->on_interval) {
+        $self->{_broadcast_buffer} .= $args->{data};
+    }
+    else {
+        $self->_process_input($args->{data});
+    }
+
+}
+
+sub _process_input {
+    my $self = shift;
+    my ($input) = @_;
+
     if (!$self->user) {
-        (my $auth_line, $args->{data}) = split /\n/, $args->{data}, 2;
+        (my $auth_line, $input) = split /\n/, $input, 2;
         my $user = $self->handle_auth($auth_line) or do {
             $self->stopped();
             return;
@@ -232,17 +245,10 @@ sub on_data {
         $cleared = 1;
     }
 
-    if ($self->on_interval) {
-        $self->{_broadcast_buffer} .= $args->{data};
-    }
-    else {
-        $self->broadcast($args->{data});
-    }
+    $self->broadcast($input);
 
-    $self->unix->add_to_buffer($args->{data});
-
+    $self->unix->add_to_buffer($input);
     $self->shorten_buffer();
-
     $self->mark_active();
 }
 
