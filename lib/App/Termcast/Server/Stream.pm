@@ -196,13 +196,13 @@ sub send_disconnection_notice {
 }
 
 sub on_data {
-    my ($self, $args) = @_;
+    my ($self, $event) = @_;
 
     if ($self->on_interval) {
-        $self->{_broadcast_buffer} .= $args->{data};
+        $self->{_broadcast_buffer} .= $event->octets;
     }
     else {
-        $self->_process_input($args->{data});
+        $self->_process_input($event->octets);
     }
 
 }
@@ -225,7 +225,7 @@ sub _process_input {
     }
 
     my $cleared = 0;
-    if ($args->{data} =~ s/\e\[H\x00(.*?)\xff\e\[H\e\[2J//) {
+    if ($input =~ s/\e\[H\x00(.*?)\xff\e\[H\e\[2J//) {
         my $metadata;
         if (
             $1 && try { $metadata = JSON::decode_json( $1 ) }
@@ -322,13 +322,13 @@ sub _disconnect {
     $_->stopped() for $self->unix->sockets->get_objects;
 }
 sub on_closed {
-    my ($self, $args) = @_;
+    my ($self) = @_;
     $self->_disconnect();
     $self->stopped();
 }
 
 sub on_error {
-    my ($self, $args) = @_;
+    my ($self) = @_;
     $self->_disconnect();
 }
 

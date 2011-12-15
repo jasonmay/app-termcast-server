@@ -261,18 +261,18 @@ has interval => (
 =cut
 
 sub on_manager_listener_accept {
-    my ($self, $args) = @_;
+    my ($self, $event) = @_;
 
     $self->remember_handle(
         App::Termcast::Server::Manager::Stream->new(
-            handle => $args->{socket},
+            handle => $event->handle,
             stream_collection => $self->streams,
         )
     );
 }
 
 sub on_termcast_listener_accept {
-    my ($self, $args) = @_;
+    my ($self, $event) = @_;
 
     my $file = ( tempfile() )[1]; unlink $file;
 
@@ -287,7 +287,7 @@ sub on_termcast_listener_accept {
     );
 
     my %stream_params = (
-        handle            => $args->{socket},
+        handle            => $event->handle,
         handle_collection => $self->handles,
         stream_id         => new_uuid_string(),
         kiokudb           => $self->kiokudb,

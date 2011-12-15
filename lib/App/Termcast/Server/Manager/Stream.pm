@@ -24,9 +24,9 @@ has json => (
 =cut
 
 sub on_data {
-    my ($self, $args) = @_;
+    my ($self, $event) = @_;
 
-    my @data = $self->json->incr_parse($args->{data});
+    my @data = $self->json->incr_parse($event->octets);
 
     $self->handle_server($_) for @data;
 }

@@ -33,16 +33,16 @@ has file => (
 );
 
 sub on_accept {
-    my ($self, $args) = @_;
+    my ($self, $event) = @_;
 
     $self->remember_unix_socket(
         Reflex::Stream->new(
-            handle => $args->{socket},
+            handle => $event->handle,
             rd     => 1,
         ),
     );
 
-    $args->{socket}->syswrite($self->buffer);
+    $event->handle->syswrite($self->buffer);
 }
 
 __PACKAGE__->meta->make_immutable;
