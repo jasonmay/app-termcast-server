@@ -52,6 +52,7 @@ sub run {
         manager_listener_path => $self->socket,
         termcast_port         => $self->port,
         interval              => $self->interval,
+        config                => $self->_config,
     );
 
     $server->run_all();

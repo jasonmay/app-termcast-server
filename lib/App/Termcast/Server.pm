@@ -198,9 +198,9 @@ sub _build_kiokudb {
 }
 
 has config => (
-    is  => 'ro',
-    isa => 'HashRef',
-    default => sub { YAML::LoadFile('etc/config.yml') },
+    is       => 'ro',
+    isa      => 'HashRef',
+    required => 1,
 );
 
 has ['termcast_is_active', 'manager_is_active'] => (
