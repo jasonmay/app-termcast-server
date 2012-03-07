@@ -1,5 +1,6 @@
 package App::Termcast::Server::Runner;
 use Moose;
+use YAML;
 
 use App::Termcast::Server;
 
@@ -7,12 +8,25 @@ use App::Termcast::Server;
 
 with 'MooseX::Getopt';
 
+has _config => (
+    is  => 'ro',
+    isa => 'HashRef',
+    default => sub { YAML::LoadFile('etc/config.yml') },
+    traits => ['NoGetopt'],
+);
+
 has socket => (
     is            => 'ro',
     isa           => 'Str',
-    default       => 'connections.sock',
+    lazy          => 1,
+    builder       => '_build_socket',
     documentation => 'UNIX domain socket path for components to connect to',
 );
+
+sub _build_socket {
+    my $self = shift;
+    return $self->_config->{socket};
+}
 
 has port => (
     is            => 'ro',
