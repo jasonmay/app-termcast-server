@@ -10,12 +10,12 @@ use Moose;
 use KiokuDB;
 use KiokuX::User::Util qw(crypt_password);
 
-use Data::UUID::LibUUID;
-
 use App::Termcast::Server::User;
 use App::Termcast::Server::Stream;
 use App::Termcast::Server::Manager::Stream;
 use App::Termcast::Server::UNIX;
+
+use Number::RecordLocator;
 
 use File::Temp qw(tempfile);
 
@@ -75,10 +75,10 @@ processing everything manually.
 =item Representative UNIX sockets
 
 This module stores a set of UNIX sockets mapped as a 1:1 representation of
-each person broadcasting. Since each session is identified by a UUID, a mapping
-of sessions IDs to its represented UNIX socket path can be stored and used
-by external applications. This can be done with a simple JSON message to the
-manager soceket:
+each person broadcasting. Since each session is identified by a string of letters
+and numbers, a mapping of sessions IDs to its represented UNIX socket path can be
+stored and used by external applications. This can be done with a simple JSON
+message to the manager soceket:
 
   {"request":"sessions"}
 
@@ -271,6 +271,13 @@ sub on_manager_listener_accept {
     );
 }
 
+{
+    my $stream_id_head = 0;
+    my $nrl = Number::RecordLocator->new;
+
+    sub generate_stream_id { $nrl->encode( ++$stream_id_head ) }
+}
+
 sub on_termcast_listener_accept {
     my ($self, $event) = @_;
 
@@ -289,7 +296,7 @@ sub on_termcast_listener_accept {
     my %stream_params = (
         handle            => $event->handle,
         handle_collection => $self->handles,
-        stream_id         => new_uuid_string(),
+        stream_id         => $self->generate_stream_id,
         kiokudb           => $self->kiokudb,
         unix              => $unix,
         interval          => $self->interval,
