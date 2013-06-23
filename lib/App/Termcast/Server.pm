@@ -17,6 +17,8 @@ use App::Termcast::Server::UNIX;
 
 use Number::RecordLocator;
 
+use Path::Class;
+
 use File::Temp qw(tempfile);
 
 use IO qw(Socket::INET Socket::UNIX);
@@ -301,6 +303,12 @@ sub on_termcast_listener_accept {
         unix              => $unix,
         interval          => $self->interval,
     );
+
+    if ($self->config->{log} && -d $self->config->{log}) {
+        $stream_params{logging} = 1,
+        $stream_params{log_path} =
+            dir($self->config->{log}, $stream_params{stream_id})->stringify;
+    }
 
     my $stream = App::Termcast::Server::Stream->new(%stream_params);
 

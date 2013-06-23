@@ -81,6 +81,24 @@ has _broadcast_buffer => (
     default => '',
 );
 
+has logging => (
+    is      => 'rw',
+    isa     => 'Bool',
+    default => 0,
+);
+
+has log_path => (
+    is      => 'ro',
+    isa     => 'Str',
+);
+
+has log_handle => (
+    is      => 'rw',
+    isa     => 'IO::Handle',
+    lazy    => 1,
+    default => sub { IO::Handle->new },
+);
+
 =begin Pod::Coverage
 
 property_data
@@ -119,6 +137,13 @@ mark_active
 
 sub BUILD {
     my $self = shift;
+
+    if ($self->logging) {
+        open($self->log_handle, '>', $self->log_path)
+            or die "Open log failed: $!";
+        $self->log_handle->autoflush();
+    }
+
     if ($self->interval) {
         my $wself = $self;
         weaken $wself;
@@ -198,11 +223,17 @@ sub send_disconnection_notice {
 sub on_data {
     my ($self, $event) = @_;
 
+    my $message = $event->octets;
+
+    if ($self->logging) {
+        $self->log_handle->syswrite($message);
+    }
+
     if ($self->on_interval) {
-        $self->{_broadcast_buffer} .= $event->octets;
+        $self->{_broadcast_buffer} .= $message;
     }
     else {
-        $self->_process_input($event->octets);
+        $self->_process_input($message);
     }
 
 }
@@ -318,7 +349,10 @@ sub create_user {
 
 sub _disconnect {
     my ($self) = @_;
+
+    $self->log_handle->close if $self->logging;
     $self->send_disconnection_notice();
+
     $_->stopped() for $self->unix->sockets->get_objects;
 }
 sub on_closed {
